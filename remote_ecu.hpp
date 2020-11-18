@@ -20,7 +20,7 @@ namespace can {
 class RemoteECU  : public CanECU
 {
 public:
-  RemoteECU(const CanName& name = CanName());
+  RemoteECU(CanProcessor*,const CanName& name = CanName());
   virtual ~RemoteECU();
 
   uint8_t                         get_address() const;

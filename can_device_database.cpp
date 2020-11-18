@@ -25,8 +25,10 @@ CanDeviceDatabase::CanDeviceDatabase(CanProcessor* processor)
 : _processor(processor)
 {
   using namespace std::placeholders;
-  _processor->register_pgn_receiver(PGN_AddressClaimed,
-        &CanDeviceDatabase::pgn_received,this,_1,_2);
+  _processor->register_pgn_receiver(PGN_AddressClaimed, [&](CanMessagePtr message,const std::string& bus)
+  {
+    pgn_received(message, bus);
+  });
 }
 
 /**
@@ -189,19 +191,30 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
         std::default_random_engine gen(r());
         std::uniform_int_distribution<> distrib(128, 247);
 
+        uint8_t sa = NULL_CAN_ADDRESS;
         while (num_attempts-- > 0)
         {
-          uint8_t sa = static_cast<uint8_t>(distrib(gen));
+          sa = static_cast<uint8_t>(distrib(gen));
           auto dv = bus_map.find_left(sa);
           if (dv.first)
             continue;
         }
 
+        bus_map.erase_right(local->name().data64());
+        CanMessagePtr msg;
+        
         if (num_attempts == 0)
         {
           // Send Unable to claim address
-
+          msg = CanMessagePtr(local->name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
         }
+        else
+        {
+          bus_map.insert(sa, local->name().data64(), local);
+          msg = CanMessagePtr(local->name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, sa);
+        }
+
+        _processor->send_raw_message(msg,bus_name);
       }
     }
   }

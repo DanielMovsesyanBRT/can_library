@@ -15,10 +15,11 @@ namespace can {
 /**
  * \fn  constructor RemoteECU::RemoteECU
  *
+ * @param  processor : CanProcessor* 
  * @param  name : const CanName& 
  */
-RemoteECU::RemoteECU(const CanName& name /*= CanName()*/)
-: CanECU(name)
+RemoteECU::RemoteECU(CanProcessor* processor,const CanName& name /*= CanName()*/)
+: CanECU(processor,name)
 {
 
 }

@@ -16,7 +16,7 @@
 namespace brt {
 namespace can {
 
-
+class CanProcessor;
 /**
  * \class CanECU
  *
@@ -24,15 +24,18 @@ namespace can {
 class CanECU : std::enable_shared_from_this<CanECU>
 {
 public:
-  CanECU(const CanName& name = CanName());
+  CanECU(CanProcessor*,const CanName& name = CanName());
   virtual ~CanECU();
 
-  std::shared_ptr<CanECU>         getptr() { return shared_from_this(); }
-  const CanName&                  name() const { return _name; }
+          CanProcessor*           processor() { return _processor; }
+          std::shared_ptr<CanECU> getptr() { return shared_from_this(); }
+          const CanName&          name() const { return _name; }
 
-  std::unordered_map<std::string,uint8_t> get_addresses() const;
+          std::unordered_map<std::string,uint8_t> 
+                                  get_addresses() const;
 
 private:
+  CanProcessor*                   _processor;
   CanName                         _name;
 };
 

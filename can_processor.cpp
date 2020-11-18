@@ -83,7 +83,11 @@ void CanProcessor::update()
       if ((time_tick - bus.second._time_tag) >= CAN_ADDRESS_CLAIMED_WAITING_TIME)
       {
         bus.second._status = eBusActive;
-        // todo: send messages from waiting queue
+        while (!bus.second._msg_fifo.empty())
+        {
+          send_raw_message(bus.second._msg_fifo.front(), bus.first);
+          bus.second._msg_fifo.pop_front();
+        }
       }
     }
   }
@@ -124,142 +128,30 @@ bool CanProcessor::init_bus(const std::string& bus_name)
       if ((bus.second._status == eBusWaitForSuccesfullTX) && 
           (bus.second._initial_msg_id == message->id()))
       {
-        bus.second._status = eBusActivating;
+        if (status == eMessageSent)
+          bus.second._status = eBusActivating;
+        else
+          bus.second._status = eBusInactive;
+          
         bus.second._time_tag = _cback->get_time_tick();
         break;
       }
     }
   });
-
-  /*
-  confirmation_wait(msg, [](void* processor, CanMessagePtr message,CanMessageConfirmation status)
-  {
-    CanProcessor* proc = reinterpret_cast<CanProcessor*>(processor);
-    for (auto& bus : proc->_bus_map)
-    {
-      if ((bus.second._status == eBusWaitForSuccesfullTX) && 
-          (bus.second._initial_msg_id == message->id()))
-      {
-        bus.second._status = eBusActivating;
-        bus.second._time_tag = proc->_cback->get_time_tick();
-        break;
-      }
-    }
-  }, this);
-
-  _cback->send_can_frame(bus_name, msg);
-  return true;   
-  */
 }
 
-// /**
-//  * \fn  CanProcessor::confirmation_wait
-//  *
-//  * @param  message : CanMessagePtr 
-//  * @param  callback : ConfirmationCallback && 
-//  * @param  param : void* 
-//  */
-// void CanProcessor::confirmation_wait(CanMessagePtr message,ConfirmationCallback && callback,void* param)
-// {
-//   WaitingFrame frm;
-//   frm._message = message;
-//   frm._time_tag = _cback->get_time_tick();
-//   frm._callback = std::move(callback);
-//   frm._param = param;
-
-//   _waiting_stack.insert(frm);
-// }
-
-// /**
-//  * \fn  CanProcessor::send_raw_message
-//  *
-//  * @param  message : CanMessagePtr 
-//  * @return  bool
-//  */
-// bool CanProcessor::send_raw_message(CanMessagePtr message,ConfirmationCallback && callback)
-// {
-//   if (_cback == nullptr)
-//     return false;
-  
-//   WaitingFrame frm;
-//   frm._message = message;
-//   frm._time_tag = _cback->get_time_tick();
-//   frm._callback = std::move(callback);
-//   frm._param = param;
-//   _waiting_stack.insert(frm);
-// }
-
 /**
- * \fn  CanProcessor::send_message
+ * \fn  CanProcessor::get_all_buses
  *
- * @param  message : CanMessagePtr 
- * @param  local : LocalECUPtr 
- * @param  remote : RemoteECUPtr 
- * @return  bool
+ * @return  std::vector<std::string
  */
-bool CanProcessor::send_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote /*= CanECUPtr()*/)
+std::vector<std::string> CanProcessor::get_all_buses() const
 {
-  if (!local)
-    return false;
+  std::vector<std::string> result;
+  for (auto bus : _bus_map)
+    result.push_back(bus.first);
 
-  std::unordered_map<std::string,uint8_t> sa_map = local->get_addresses();
-
-  if (!remote)
-  {
-    // broadcast
-    for (auto bus_iter : _bus_map)
-    {
-      auto sa = sa_map.find(bus_iter.first);
-      if (sa == sa_map.end())
-        continue;
-
-      if (bus_iter.second._status == eBusInactive)
-        continue;
-
-      if (bus_iter.second._status != eBusActive)
-      {
-        bus_iter.second._msg_fifo.push_back(MsgFifoItem(message, local, remote));   
-        continue;
-      }
-
-      if (message->length() <= 8)
-      {
-        CanMessagePtr msg(message->data(),message->length(),message->pgn(),BROADCATS_CAN_ADDRESS,sa->second,message->priority());
-        _cback->send_can_frame(bus_iter.first, msg);
-      }
-    }
-  }
-  else
-  {
-    std::vector<std::string> buses = _device_db.get_ecu_bus(remote->name());
-    if (buses.empty())
-      return false;
-
-    auto bus_iter = _bus_map.find(buses[0]);
-    if (bus_iter == _bus_map.end())
-      return false;
-
-    auto sa = sa_map.find(buses[0]);
-    if (sa == sa_map.end())
-      return false;
-
-    if (bus_iter->second._status == eBusInactive)
-      return false;
-
-    if (bus_iter->second._status != eBusActive)
-    {
-      bus_iter->second._msg_fifo.push_back(MsgFifoItem(message, local, remote));   
-      return true;
-    }
-
-    if (message->length() <= 8)
-    {
-      CanMessagePtr msg(message->data(),message->pgn(),remote->get_address(),sa->second,message->priority());
-      _cback->send_can_frame(bus_iter->first, msg);
-    }
-  }
-
-  return true;
+  return result;
 }
 
 /**
@@ -328,6 +220,75 @@ void CanProcessor::can_frame_confirm(CanMessagePtr message)
 
   if ((iter != _waiting_stack.end()) && iter->_callback)
     iter->_callback(iter->_message, eMessageSent);
+}
+
+/**
+ * \fn  CanProcessor::send_raw_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  bus_name : const std::string&
+ * @param  fn :  ConfirmationCallback && 
+ * @return  bool
+ */
+bool CanProcessor::send_raw_message(CanMessagePtr message,const std::string& bus_name,
+                      ConfirmationCallback && fn/* = ConfirmationCallback()*/)
+{
+  if (_cback == nullptr)
+    return false;
+
+  auto bus = _bus_map.find(bus_name);
+  if (bus == _bus_map.end())
+    return false;
+
+  if (bus->second._status == eBusInactive)
+    return false;
+
+  using namespace std::placeholders;
+  WaitingFrame frm;
+  frm._message = message;
+  frm._time_tag = _cback->get_time_tick();
+  frm._callback = std::bind(std::forward<ConfirmationCallback>(fn), _1, _2);
+
+  _waiting_stack.insert(frm);
+
+  if (bus->second._status != eBusActive)
+  {
+    // There is a potential danger that remote device or
+    // local device will change its address on the bus while
+    // bus is in waiting state, however for this moment we consider
+    // the message is already on the bus - outside of address negotiation logic
+    bus->second._msg_fifo.push_back(message);   
+  }
+  else
+  {
+    _cback->send_can_frame(bus_name,message);
+  }
+  return true;
+
+}
+
+/**
+ * \fn  CanProcessor::register_pgn_receiver
+ *
+ * @param  pgn : uint32_t 
+ * @param  fn :  PGNCallback && 
+ */
+void CanProcessor::register_pgn_receiver(uint32_t pgn, PGNCallback && fn)
+{
+  using namespace std::placeholders;
+  _pgn_receivers.insert(std::unordered_map<uint32_t,PGNCallback>::value_type(pgn,
+                  std::bind(std::forward<PGNCallback>(fn), _1, _2)));
+
+}
+
+/**
+ * \fn  CanProcessor::register_updater
+ *
+ * @param  fn : UpdateCallback && 
+ */
+void CanProcessor::register_updater(UpdateCallback && fn)
+{
+  _updaters.push_back(std::bind(std::forward<UpdateCallback>(fn)));
 }
 
 

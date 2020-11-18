@@ -15,9 +15,12 @@ namespace can {
 /**
  * \fn  constructor CanECU::CanECU
  *
+ * @param  processor : CanProcessor* 
+ * @param  name : const CanName& 
  */
-CanECU::CanECU(const CanName& name /*= CanName()*/)
-: _name(name)
+CanECU::CanECU(CanProcessor* processor,const CanName& name /*= CanName()*/)
+: _processor(processor)
+, _name(name)
 {
 
 }
@@ -38,7 +41,7 @@ CanECU::~CanECU()
  */
 std::unordered_map<std::string,uint8_t> CanECU::get_addresses() const
 {
-  return CanProcessor::get()->device_db().get_ecu_source_addresses(name());
+  return _processor->device_db().get_ecu_source_addresses(name());
 }
 
 } // can
