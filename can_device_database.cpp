@@ -156,7 +156,7 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
   
   if (ecu_left.first && ecu_right.first && (ecu_left.second.second == ecu_right.second.second))
   {
-    // This is athe same device and nothing changed about that
+    // This is the same device and nothing changed about that
     return;
   }
 
@@ -176,6 +176,7 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
       if (local->name().data64() < name.data64())
       {
         // address claim
+        local->claim_address(ecu_right.second.first, bus_name);
       }
       else if (local->name().data64() == name.data64())
       {
@@ -185,42 +186,124 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
       }
       else if (local->name().data64() > name.data64())
       {
-        // Generate Random address between 128 and 247
-        int num_attempts = (247 - 128);
-        std::random_device r;
-        std::default_random_engine gen(r());
-        std::uniform_int_distribution<> distrib(128, 247);
-
-        uint8_t sa = NULL_CAN_ADDRESS;
-        while (num_attempts-- > 0)
+        if (!local->name().is_self_configurable())
         {
-          sa = static_cast<uint8_t>(distrib(gen));
-          auto dv = bus_map.find_left(sa);
-          if (dv.first)
-            continue;
-        }
-
-        bus_map.erase_right(local->name().data64());
-        CanMessagePtr msg;
-        
-        if (num_attempts == 0)
-        {
-          // Send Unable to claim address
-          msg = CanMessagePtr(local->name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
+          // Local device address is not self configurable,
+          // So we disable it for current bus
+          bus_map.erase_right(local->name().data64());
+          local->claim_address(NULL_CAN_ADDRESS, bus_name);
         }
         else
         {
-          bus_map.insert(sa, local->name().data64(), local);
-          msg = CanMessagePtr(local->name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, sa);
+          uint8_t sa = find_free_address(bus_map);
+          bus_map.erase_right(local->name().data64());
+          if (sa == NULL_CAN_ADDRESS)
+          {
+            // Reached the end of all attemts
+            local->claim_address(NULL_CAN_ADDRESS, bus_name);
+          }
+          else
+          {
+            bus_map.insert(sa, local->name().data64(), local);
+            local->claim_address(sa, bus_name);
+          }
         }
-
-        _processor->send_raw_message(msg,bus_name);
       }
     }
   }
-
 }
 
+/**
+ * \fn  CanDeviceDatabase::add_local_ecu
+ *
+ * @param  ecu : LocalECUPtr 
+ * @param  bus :  const std::string&
+ * @param  address : uint8_t 
+ * @return  bool
+ */
+bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address)
+{
+  auto bus_map = _device_map.find(bus);
+  if (bus_map == _device_map.end())
+    return false;
+
+  if (address == BROADCATS_CAN_ADDRESS)
+  {
+    address = find_free_address(bus_map->second);
+    if (address == NULL_CAN_ADDRESS)
+      return false;
+
+    bus_map->second.insert(address, ecu->name().data64(), ecu);
+    ecu->claim_address(address, bus);
+  }
+  else
+  {
+    auto slot = bus_map->second.find_left(address);
+    if (slot.first)
+    {
+      uint8_t new_address = NULL_CAN_ADDRESS;
+      // The address is occupied, so we look to change it 
+      // if all conditions are met
+      if (ecu->name().is_self_configurable())
+        new_address = find_free_address(bus_map->second);
+      
+      if (new_address == NULL_CAN_ADDRESS)
+      {
+        // Couldn't generate new address or 
+        // address is not configurable
+        if (ecu->name().data64() < slot.second.first)
+        {
+          // Our ecu has higher priority
+          // So we try to push the other one out
+          bus_map->second.insert(address, ecu->name().data64(), ecu);
+          ecu->claim_address(address, bus);
+        }
+        else
+        {
+          // Unable to register local ECU on this BUS
+          // So we are going to discard it
+          return false;
+        }
+      }
+    }
+    else
+    {
+      bus_map->second.insert(address, ecu->name().data64(), ecu);
+      ecu->claim_address(address, bus);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * \fn  CanDeviceDatabase::find_free_address
+ *
+ * @param  bus_map : BusMap& 
+ * @return  uint8_t
+ */
+uint8_t CanDeviceDatabase::find_free_address(BusMap& bus_map)
+{
+  // Generate Random address between 128 and 247
+  int num_attempts = (247 - 128);
+  std::random_device r;
+  std::default_random_engine gen(r());
+  std::uniform_int_distribution<> distrib(128, 247);
+
+  uint8_t sa = NULL_CAN_ADDRESS;
+  while (num_attempts-- > 0)
+  {
+    sa = static_cast<uint8_t>(distrib(gen));
+    auto dv = bus_map.find_left(sa);
+    if (dv.first)
+      continue;
+  }
+
+  if (num_attempts == 0)
+    return NULL_CAN_ADDRESS;
+
+  return sa;
+}
 
 } // can
 } // brt

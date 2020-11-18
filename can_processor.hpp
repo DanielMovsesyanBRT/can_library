@@ -84,8 +84,10 @@ public:
           bool                    init_bus(const std::string& bus);
           std::vector<std::string> get_all_buses() const;
   
-
           bool                    received_can_frame(CanMessagePtr message,const std::string& bus);
+          LocalECUPtr             create_local_ecu(const CanName& name,
+                                            uint8_t desired_address = BROADCATS_CAN_ADDRESS,
+                                            const std::vector<std::string>& desired_buses = std::vector<std::string>());
   
           void                    can_frame_confirm(uint64_t message_id);
           void                    can_frame_confirm(CanMessagePtr message);

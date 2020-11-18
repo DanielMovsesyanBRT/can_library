@@ -41,6 +41,7 @@ public:
 
           void                    claim_address(uint8_t address,const std::string& bus);
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
+          void                    disable_device(const std::string& bus);
 private:
 
   /**

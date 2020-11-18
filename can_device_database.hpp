@@ -28,26 +28,29 @@ class CanProcessor;
  */
 class CanDeviceDatabase  
 {
+  typedef BiKeyMap<uint8_t,uint64_t,CanECUPtr>  BusMap;
+  typedef std::unordered_map<std::string,BusMap> DeviceMap;
+
 public:
   CanDeviceDatabase(CanProcessor*);
   virtual ~CanDeviceDatabase();
 
-  void                            create_bus(const std::string& bus_name);  
+          void                    create_bus(const std::string& bus_name);  
 
-  CanECUPtr                       get_ecu_by_address(uint8_t sa,const std::string& bus) const;
-  CanECUPtr                       get_ecu_by_name(const CanName& ecu_name) const;
+          CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus) const;
+          CanECUPtr               get_ecu_by_name(const CanName& ecu_name) const;
 
-  std::unordered_map<std::string,uint8_t> get_ecu_source_addresses(const CanName& ecu_name) const;
-  std::vector<std::string>        get_ecu_bus(const CanName& ecu_name) const;
+          std::unordered_map<std::string,uint8_t> get_ecu_source_addresses(const CanName& ecu_name) const;
+          std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
+
+          bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address);
 
 private:
-  void                            pgn_received(CanMessagePtr,const std::string& bus_name);
+          void                    pgn_received(CanMessagePtr,const std::string& bus_name);
+          uint8_t                 find_free_address(BusMap& bus_map);
 
 private:
   CanProcessor*                   _processor;
-
-  typedef BiKeyMap<uint8_t,uint64_t,CanECUPtr>  BusMap;
-  typedef std::unordered_map<std::string,BusMap> DeviceMap;
   
   DeviceMap                       _device_map;
   std::unordered_set<CanECUPtr>   _local_devices;

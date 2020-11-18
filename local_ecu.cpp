@@ -56,7 +56,7 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus)
   {
     // Claiming NULL address means we are sending Cannot Claim Address message,
     // which automatically deactivates the device
-    stat->second._status = eInavtive;
+    disable_device(bus);
   }
   else
   {
@@ -157,6 +157,18 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
   }
 
   return true;
+}
+
+/**
+ * \fn  LocalECU::disable_device
+ *
+ * @param  & bus : const std::string
+ */
+void LocalECU::disable_device(const std::string& bus)
+{
+  auto stat = _bus_status.find(bus);
+  if (stat != _bus_status.end())
+    stat->second._status = eInavtive;
 }
 
 } // can

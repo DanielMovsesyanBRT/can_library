@@ -155,6 +155,62 @@ std::vector<std::string> CanProcessor::get_all_buses() const
 }
 
 /**
+ * \fn  CanProcessor::create_local_ecu
+ *
+ * @param  name : const CanName& 
+ * @param  desired_address :  uint8_t 
+ * @param  desired_buses :  const std::vector<std::string>&
+ * @return  LocalECUPtr
+ */
+LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
+                                            uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/,
+                                            const std::vector<std::string>& desired_buses /*= std::vector<std::string>()*/)
+{
+  CanECUPtr ecu = _device_db.get_ecu_by_name(name);
+  if (ecu)
+    return std::dynamic_pointer_cast<LocalECU>(ecu);
+
+  bool result = false;
+  LocalECUPtr local = std::make_shared<LocalECU>(this, name);
+  if (desired_buses.empty()) // all buses
+  {
+    for (auto bus : _bus_map)
+    {
+      if (!_device_db.add_local_ecu(local, bus.first, desired_address))
+      {
+        // Unable to register device on the Bus
+        // So we are going to disable it
+        local->disable_device(bus.first);
+      }
+      else
+        result = true;
+    }
+  }
+  else
+  {
+    for (auto bus : desired_buses)
+    {
+      if (_bus_map.find(bus) == _bus_map.end())
+        continue;
+
+      if (!_device_db.add_local_ecu(local, bus, desired_address))
+      {
+        // Unable to register device on the Bus
+        // So we are going to disable it
+        local->disable_device(bus);
+      }
+      else
+        result = true;
+    }
+  }
+
+  if (!result)
+    return LocalECUPtr();
+
+  return local;
+}
+
+/**
  * \fn  CanProcessor::received_can_frame
  *
  * @param  message : CanMessagePtr 
