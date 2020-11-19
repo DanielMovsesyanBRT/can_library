@@ -24,11 +24,6 @@ namespace can {
 CanDeviceDatabase::CanDeviceDatabase(CanProcessor* processor)
 : _processor(processor)
 {
-  using namespace std::placeholders;
-  _processor->register_pgn_receiver(PGN_AddressClaimed, [&](CanMessagePtr message,const std::string& bus)
-  {
-    pgn_received(message, bus);
-  });
 }
 
 /**
@@ -38,6 +33,19 @@ CanDeviceDatabase::CanDeviceDatabase(CanProcessor* processor)
 CanDeviceDatabase::~CanDeviceDatabase()
 {
 
+}
+
+/**
+ * \fn  CanDeviceDatabase::initialize
+ *
+ */
+void CanDeviceDatabase::initialize()
+{
+  using namespace std::placeholders;
+  _processor->register_pgn_receiver(PGN_AddressClaimed, [&](CanMessagePtr message,const std::string& bus)
+  {
+    pgn_received(message, bus);
+  });
 }
 
 /**

@@ -47,6 +47,7 @@ bool CanProcessor::initialize(Callback* cback)
     return false;
 
   _cback = cback;
+  _device_db.initialize();
   return true;
 }
 
@@ -114,7 +115,7 @@ bool CanProcessor::init_bus(const std::string& bus_name)
   bus._bus_name       = bus_name;
   bus._status         = eBusWaitForSuccesfullTX;
   bus._time_tag       = _cback->get_time_tick();
-  bus._initial_msg_id = msg->id();
+  bus._initial_msg_id = msg->packet_id();
 
   auto result = _bus_map.insert(std::unordered_map<std::string,Bus>::value_type(bus_name,bus));
   if (!result.second)
@@ -126,7 +127,7 @@ bool CanProcessor::init_bus(const std::string& bus_name)
     for (auto& bus : _bus_map)
     {
       if ((bus.second._status == eBusWaitForSuccesfullTX) && 
-          (bus.second._initial_msg_id == message->id()))
+          (bus.second._initial_msg_id == message->packet_id()))
       {
         if (status == eMessageSent)
           bus.second._status = eBusActivating;
@@ -255,7 +256,7 @@ void CanProcessor::can_frame_confirm(uint64_t message_id)
 {
   auto iter = std::find_if(_waiting_stack.begin(), _waiting_stack.end(),[message_id](const WaitingFrame& frm)->bool
   {
-    return frm._message->id() == message_id;
+    return frm._message->packet_id() == message_id;
   });
 
   if ((iter != _waiting_stack.end()) && iter->_callback)

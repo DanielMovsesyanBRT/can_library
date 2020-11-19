@@ -84,6 +84,23 @@ CanMessage::~CanMessage()
 
 }
 
+/**
+ * \fn  CanMessage::id
+ *
+ * @return  uint32_t
+ */
+uint32_t CanMessage::id() const
+{
+  uint32_t id = (_priority & 7) << 26 | _sa;
+  if (is_pdu1())
+    id |= ((_pgn & 0x3FF00) << 8) | (_da << 8);
+  
+  else
+    id |= _pgn << 8;
+
+  return id;
+}
+
 } // can
 } // brt
 

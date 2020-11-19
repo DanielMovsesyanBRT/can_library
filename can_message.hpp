@@ -33,6 +33,7 @@ public:
 
   virtual ~CanMessage();
 
+  uint32_t                        id() const;
   uint32_t                        pgn() const { return _pgn; }
   uint8_t                         sa() const { return _sa; }
   uint8_t                         da() const { return (is_pdu2() && (length() > 8))? BROADCATS_CAN_ADDRESS : _da; } 
@@ -48,7 +49,7 @@ public:
   
   const uint8_t*                  data() const { return _data.data(); }
   uint32_t                        length() const { return static_cast<uint32_t>(_data.size()); }
-  uint64_t                        id() const { return _packet_id; }
+  uint64_t                        packet_id() const { return _packet_id; }
 
 private:
   uint32_t                        _pgn;

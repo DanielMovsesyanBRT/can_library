@@ -35,6 +35,7 @@ public:
   CanDeviceDatabase(CanProcessor*);
   virtual ~CanDeviceDatabase();
 
+          void                    initialize();
           void                    create_bus(const std::string& bus_name);  
 
           CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus) const;
