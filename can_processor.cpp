@@ -34,7 +34,6 @@ CanProcessor::~CanProcessor()
 
 }
 
-
 /**
  * \fn  CanProcessor::initialize
  *
@@ -78,10 +77,10 @@ void CanProcessor::update()
             iter++;
         }
 
-        while (!bus.second._msg_fifo.empty())
+        while (!bus.second._packet_fifo.empty())
         {
-          send_raw_message(bus.second._msg_fifo.front(), bus.first);
-          bus.second._msg_fifo.pop_front();
+          send_raw_packet(bus.second._packet_fifo.front(), bus.first);
+          bus.second._packet_fifo.pop_front();
         }
       }
     }
@@ -110,13 +109,13 @@ bool CanProcessor::init_bus(const std::string& bus_name)
     return false;
 
   // Request for address Claimed
-  CanMessagePtr msg({00,0xEE,00} , PGN_Request, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
+  CanPacket packet({00,0xEE,00}, PGN_Request, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
 
   Bus bus;
   bus._bus_name       = bus_name;
   bus._status         = eBusWaitForSuccesfullTX;
   bus._time_tag       = _cback->get_time_tick();
-  bus._initial_msg_id = msg->packet_id();
+  bus._initial_packet_id = packet.unique_id();
 
   auto result = _bus_map.insert(std::unordered_map<std::string,Bus>::value_type(bus_name,bus));
   if (!result.second)
@@ -125,13 +124,13 @@ bool CanProcessor::init_bus(const std::string& bus_name)
   _device_db.create_bus(bus_name);
 
   // Register callback for this messgae to process BUS activation 
-  _confirm_callbacks.push_back(MessageConfirmation(msg,
-           [&](CanMessagePtr message,CanMessageConfirmation status) 
+  _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(),
+           [&](uint64_t packet_id,CanMessageConfirmation status) 
       {
         for (auto& bus : _bus_map)
         {
           if ((bus.second._status == eBusWaitForSuccesfullTX) && 
-              (bus.second._initial_msg_id == message->packet_id()))
+              (bus.second._initial_packet_id == packet_id))
           {
             if (status == eMessageSent)
               bus.second._status = eBusActivating;
@@ -151,7 +150,7 @@ bool CanProcessor::init_bus(const std::string& bus_name)
         }
       }));
 
-  _cback->send_can_frame(bus_name, msg);
+  _cback->send_can_packet(bus_name, packet);
   return true;
 }
 
@@ -241,89 +240,90 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
 }
 
 /**
- * \fn  CanProcessor::received_can_frame
+ * \fn  CanProcessor::received_can_packet
  *
- * @param  message : CanMessagePtr 
- * @param  bus : const std::string&
+ * @param  packet : const CanPacket& 
+ * @param  & bus : const std::string
  * @return  bool
  */
-bool CanProcessor::received_can_frame(CanMessagePtr message,const std::string& bus)
+bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string& bus)
 {
   if (_cback == nullptr)
     return false;
 
-  auto pgn_receiver = _pgn_receivers.find(message->pgn());
+  auto pgn_receiver = _pgn_receivers.find(packet.pgn());
   if (pgn_receiver != _pgn_receivers.end())
   {
-    pgn_receiver->second(message, bus);
+    pgn_receiver->second(packet, bus);
     return true;
   }
 
   LocalECUPtr   local;
   RemoteECUPtr  remote;
   // Is this our message
-  if (!message->is_broadcast())
+  if (!packet.is_broadcast())
   {
-    local = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(message->da(), bus));
+    local = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus));
     if (!local)
       return false; // Not our message
   }
 
-  if (message->sa() < NULL_CAN_ADDRESS)
-    remote = std::dynamic_pointer_cast<RemoteECU>(_device_db.get_ecu_by_address(message->sa(), bus));
+  if (packet.sa() < NULL_CAN_ADDRESS)
+    remote = std::dynamic_pointer_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus));
 
-  _cback->message_received(message, local, remote);
+  _cback->message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote);
   return true;
 }
 
 /**
- * \fn  CanProcessor::can_frame_confirm
+ * \fn  CanProcessor::can_packet_confirm
  *
- * @param  message_id : uint64_t 
+ * @param  packet_id : uint64_t 
  * @param  status : CanMessageConfirmation 
  */
-void CanProcessor::can_frame_confirm(uint64_t message_id,CanMessageConfirmation status)
+void CanProcessor::can_packet_confirm(uint64_t packet_id,CanMessageConfirmation status)
 {
-  auto iter = std::find_if(_confirm_callbacks.begin(), _confirm_callbacks.end(),[message_id](const MessageConfirmation& cfrm)->bool
+  auto iter = std::find_if(_confirm_callbacks.begin(), _confirm_callbacks.end(),[packet_id](const PacketConfirmation& cfrm)->bool
   {
-    return cfrm._message->packet_id() == message_id;
+    return cfrm._packet_id == packet_id;
   });
 
   if ((iter != _confirm_callbacks.end()) && iter->_callback)
   {
-    iter->_callback(iter->_message, status);
+    iter->_callback(packet_id, status);
     _confirm_callbacks.erase(iter);
   }
 }
 
 /**
- * \fn  CanProcessor::can_frame_confirm
+ * \fn  CanProcessor::can_packet_confirm
  *
- * @param  message : CanMessagePtr 
+ * @param  packet : const CanPacket& 
+ * @param  status : CanMessageConfirmation 
  */
-void CanProcessor::can_frame_confirm(CanMessagePtr message,CanMessageConfirmation status)
+void CanProcessor::can_packet_confirm(const CanPacket& packet,CanMessageConfirmation status)
 {
-  auto iter = std::find_if(_confirm_callbacks.begin(), _confirm_callbacks.end(),[message](const MessageConfirmation& cfrm)->bool
+  auto iter = std::find_if(_confirm_callbacks.begin(), _confirm_callbacks.end(),[packet](const PacketConfirmation& cfrm)->bool
   {
-    return cfrm._message == message;
+    return cfrm._packet_id == packet.unique_id();
   });
 
   if ((iter != _confirm_callbacks.end()) && iter->_callback)
   {
-    iter->_callback(iter->_message, status);
+    iter->_callback(packet.unique_id(), status);
     _confirm_callbacks.erase(iter);
   }
 }
 
 /**
- * \fn  CanProcessor::send_raw_message
+ * \fn  CanProcessor::send_raw_packet
  *
- * @param  message : CanMessagePtr 
+ * @param  packet : const CanPacket& 
  * @param  bus_name : const std::string&
  * @param  fn :  ConfirmationCallback 
  * @return  bool
  */
-bool CanProcessor::send_raw_message(CanMessagePtr message,const std::string& bus_name,
+bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bus_name,
                       ConfirmationCallback fn/* = ConfirmationCallback()*/)
 {
   if (_cback == nullptr)
@@ -337,7 +337,7 @@ bool CanProcessor::send_raw_message(CanMessagePtr message,const std::string& bus
     return false;
 
   if (fn)
-    _confirm_callbacks.push_back(MessageConfirmation(message, fn));
+    _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(), fn));
 
   if (bus->second._status != eBusActive)
   {
@@ -345,11 +345,11 @@ bool CanProcessor::send_raw_message(CanMessagePtr message,const std::string& bus
     // local device will change its address on the bus while
     // bus is in waiting state, however for this moment we consider
     // the message is already on the bus - outside of address negotiation logic
-    bus->second._msg_fifo.push_back(message);   
+    bus->second._packet_fifo.push_back(packet);
   }
   else
   {
-    _cback->send_can_frame(bus_name,message);
+    _cback->send_can_packet(bus_name,packet);
   }
   return true;
 

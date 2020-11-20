@@ -8,6 +8,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <atomic>
 
 namespace brt {
 namespace can {
@@ -120,6 +121,42 @@ private:
 
   Map1                            _map1;
   Map2                            _map2;
+};
+
+
+class CanProcessor;
+/**
+ * \class Mutex
+ *
+ */
+class Mutex
+{
+public:
+  Mutex(CanProcessor* processor);
+  virtual ~Mutex();
+
+  virtual void                    lock();
+  virtual void                    unlock();
+
+private:
+  uint32_t                        _mutex_id;
+  CanProcessor*                   _processor;
+};
+
+/**
+ * \class RecoursiveMutex
+ *
+ */
+class RecoursiveMutex : public Mutex
+{
+public:
+  RecoursiveMutex(CanProcessor* processor);
+  virtual ~RecoursiveMutex() {}
+
+  virtual void                    lock();
+  virtual void                    unlock();
+private:
+  std::atomic_uint_fast32_t       _lock_counter;
 };
 
 

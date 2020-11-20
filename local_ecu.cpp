@@ -51,7 +51,6 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus)
     container = pair.first;
   }
 
-  CanMessagePtr msg(name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, address);
   if (address == NULL_CAN_ADDRESS)
   {
     // Claiming NULL address means we are sending Cannot Claim Address message,
@@ -87,7 +86,7 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus)
     });
   }
 
-  processor()->send_raw_message(msg,bus);
+  processor()->send_raw_packet(CanPacket(name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, address),bus);
 }
 
 /**
@@ -120,8 +119,9 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
 
       if (message->length() <= 8)
       {
-        CanMessagePtr msg(message->data(),message->length(),message->pgn(),BROADCATS_CAN_ADDRESS,sa->second,message->priority());
-        processor()->send_raw_message(msg, container.first);
+        processor()->send_raw_packet(CanPacket(message->data(),
+                        message->length(),message->pgn(),BROADCATS_CAN_ADDRESS,
+                        sa->second,message->priority()), container.first);
       }
     }
   }
@@ -150,8 +150,8 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
 
     if (message->length() <= 8)
     {
-      CanMessagePtr msg(message->data(),message->pgn(),remote->get_address(),sa->second,message->priority());
-      if (!processor()->send_raw_message(msg, buses[0]))
+      if (!processor()->send_raw_packet(CanPacket(message->data(),message->pgn(),
+                    remote->get_address(),sa->second,message->priority()), buses[0]))
         return false;
     }
   }

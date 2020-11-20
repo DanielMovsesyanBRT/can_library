@@ -42,9 +42,9 @@ CanDeviceDatabase::~CanDeviceDatabase()
 void CanDeviceDatabase::initialize()
 {
   using namespace std::placeholders;
-  _processor->register_pgn_receiver(PGN_AddressClaimed, [&](CanMessagePtr message,const std::string& bus)
+  _processor->register_pgn_receiver(PGN_AddressClaimed, [this](const CanPacket& packet,const std::string& bus)
   {
-    pgn_received(message, bus);
+    pgn_received(packet, bus);
   });
 }
 
@@ -144,12 +144,12 @@ std::vector<std::string> CanDeviceDatabase::get_ecu_bus(const CanName& ecu_name)
 /**
  * \fn  CanDeviceDatabase::pgn_received
  *
- * @param  message : CanMessagePtr 
- * @param  bus_name : const std::string&
+ * @param  packet : const CanPacket& 
+ * @param  & bus_name : const std::string
  */
-void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bus_name)
+void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& bus_name)
 {
-  if (message->pgn() != PGN_AddressClaimed)
+  if (packet.pgn() != PGN_AddressClaimed)
     return;
 
   auto bus_iter = _device_map.find(bus_name);
@@ -157,9 +157,9 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
     return;
 
   BusMap& bus_map = bus_iter->second;
-  CanName name(message->data());
+  CanName name(packet.data());
   
-  auto ecu_left = bus_map.find_left(message->sa());
+  auto ecu_left = bus_map.find_left(packet.sa());
   auto ecu_right = bus_map.find_right(name.data64());
   
   if (ecu_left.first && ecu_right.first && (ecu_left.second.second == ecu_right.second.second))
@@ -207,7 +207,7 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
     // or relocate old one
     // Note: in case if there is some remote device exist under 
     // requested address the thser function will remove it from the map
-    bus_map.insert(message->sa(), name.data64(), by_name);
+    bus_map.insert(packet.sa(), name.data64(), by_name);
   }
   else if (is_local_ecu(by_addr))
   {
@@ -225,7 +225,7 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
     {
       // Ok here we are trying to change our address, but first
       // we will need to put remote device back to the map
-      bus_map.insert(message->sa(), name.data64(), by_name);
+      bus_map.insert(packet.sa(), name.data64(), by_name);
 
       if (!local->name().is_self_configurable())
       {

@@ -46,7 +46,7 @@ public:
 
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address);
 private:
-          void                    pgn_received(CanMessagePtr,const std::string& bus_name);
+          void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
           uint8_t                 find_free_address(BusMap& bus_map);
           
           bool                    is_local_ecu(CanECUPtr ecu) 

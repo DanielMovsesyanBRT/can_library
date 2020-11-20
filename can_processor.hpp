@@ -59,8 +59,8 @@ class CanProcessor
   virtual ~CanProcessor();
 
 public:
-  typedef std::function<void(CanMessagePtr,CanMessageConfirmation)> ConfirmationCallback;
-  typedef std::function<void(CanMessagePtr,const std::string&)>     PGNCallback;
+  typedef std::function<void(uint64_t,CanMessageConfirmation)>      ConfirmationCallback;
+  typedef std::function<void(const CanPacket&,const std::string&)>  PGNCallback;
   typedef std::function<bool()>                                     UpdateCallback;
   typedef std::function<bool(const std::string&,CanBusStatus)>      BusStatusCallback;
 
@@ -76,7 +76,13 @@ public:
     virtual ~Callback() {}
     virtual uint64_t                get_time_tick() = 0;
     virtual void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote) = 0;
-    virtual void                    send_can_frame(const std::string& bus, CanMessagePtr message) = 0;
+    virtual void                    send_can_packet(const std::string& bus, const CanPacket& packet) = 0;
+
+    virtual uint32_t                create_mutex() = 0;
+    virtual void                    delete_mutex(uint32_t) = 0;
+    
+    virtual void                    lock_mutex(uint32_t) = 0;
+    virtual void                    unlock_mutex(uint32_t) = 0;
   };
 
           bool                    initialize(Callback*);
@@ -87,21 +93,26 @@ public:
           CanBusStatus            get_bus_status(const std::string& bus) const;
           std::vector<std::string> get_all_buses() const;
   
-          bool                    received_can_frame(CanMessagePtr message,const std::string& bus);
+          bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
           LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
                                             const std::vector<std::string>& desired_buses = std::vector<std::string>());
   
-          void                    can_frame_confirm(uint64_t message_id,CanMessageConfirmation);
-          void                    can_frame_confirm(CanMessagePtr message,CanMessageConfirmation);
+          void                    can_packet_confirm(uint64_t packet_id,CanMessageConfirmation);
+          void                    can_packet_confirm(const CanPacket& packet,CanMessageConfirmation);
 
           CanDeviceDatabase&      device_db() { return _device_db; }
           const CanDeviceDatabase& device_db() const { return _device_db; }
 
-          bool                    send_raw_message(CanMessagePtr message,const std::string& bus,ConfirmationCallback fn = ConfirmationCallback());
+          bool                    send_raw_packet(const CanPacket& packet,const std::string& bus,ConfirmationCallback fn = ConfirmationCallback());
           void                    register_pgn_receiver(uint32_t pgn, PGNCallback fn);
           void                    register_updater(UpdateCallback fn);
           void                    register_bus_callback(const std::string& bus_name, BusStatusCallback fn);
+
+          uint32_t                create_mutex() { return (_cback != nullptr) ? _cback->create_mutex() : (uint32_t)-1; }
+          void                    delete_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->delete_mutex(mtx_id); }
+          void                    lock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->lock_mutex(mtx_id); }
+          void                    unlock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->unlock_mutex(mtx_id); }
 
 private:
   static  CanProcessor            _object;
@@ -109,17 +120,17 @@ private:
   CanDeviceDatabase               _device_db;
 
   /**
-   * \struct MessageConfirmation
+   * \struct PacketConfirmation
    *
    */
-  struct MessageConfirmation
+  struct PacketConfirmation
   {
-    MessageConfirmation(CanMessagePtr message,ConfirmationCallback cback)
-    : _message(message)
+    PacketConfirmation(uint64_t packet_id,ConfirmationCallback cback)
+    : _packet_id(packet_id)
     , _callback(cback)
     { }
 
-    CanMessagePtr                 _message;
+    uint64_t                      _packet_id;
     ConfirmationCallback          _callback;
   };
 
@@ -132,18 +143,20 @@ private:
     std::string                     _bus_name;
     CanBusStatus                    _status;
     uint64_t                        _time_tag;
-    uint64_t                        _initial_msg_id;
+    uint64_t                        _initial_packet_id;
 
-    std::deque<CanMessagePtr>       _msg_fifo;
+    std::deque<CanPacket>           _packet_fifo;
     std::list<BusStatusCallback>    _bus_callbacks;
   };
 
   std::unordered_map<std::string,Bus> _bus_map;
   std::unordered_map<uint32_t,PGNCallback> _pgn_receivers;
   
-  std::list<MessageConfirmation>  _confirm_callbacks;
+  std::list<PacketConfirmation>   _confirm_callbacks;
   std::list<UpdateCallback>       _updaters;
 };
+
+
 
 } // can
 } // brt

@@ -11,6 +11,7 @@
 namespace brt {
 namespace can {
 
+#define MAX_CAN_PACKET_SIZE                 (8)
 #define DEFAULT_CAN_PRIORITY                (6)
 #define BROADCATS_CAN_ADDRESS               (255)
 #define NULL_CAN_ADDRESS                    (254)
