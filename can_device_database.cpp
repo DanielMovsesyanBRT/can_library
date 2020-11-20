@@ -168,53 +168,85 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
     return;
   }
 
-  if (ecu_left.first && ecu_right.first && (ecu_left.second.second != ecu_right.second.second))
-  {
-    LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(ecu_right.second.second);
-    RemoteECUPtr remote = std::dynamic_pointer_cast<RemoteECU>(ecu_left.second.second);
+  CanECUPtr by_addr = ecu_left.second.second;
+  CanECUPtr by_name = ecu_right.second.second;
 
-    if (!local) // not a local device
+  if (!by_name)
+  {
+    auto lost = _remote_devices.find(name.data64());
+    if (lost != _remote_devices.end())
+      by_name = lost->second;
+  }
+
+  if (by_name)
+  {
+    // Whether Remote ECU changed its address or
+    // Somehow another ECU on the BUS claimed the same name as 
+    // one of our local ECUs. We need to erase that slot from teh map
+
+    if (is_local_ecu(by_name))
     {
-      // remove from left and put back under new source address
-      bus_map.erase_left(message->sa());
-      bus_map.insert(message->sa(), name.data64(), ecu_left.second.second);
+      // TODO: notify about ECU error !!!
     }
-    else // address collision that has to be resolved
+
+    bus_map.erase_right(name.data64());
+  }
+
+  // Check if this is a new Remote device sending address claim
+  if (!is_remote_ecu(by_name))
+  {
+    by_name.reset(new RemoteECU(_processor, name));
+    
+    // Register new device iin the Remote Database
+    _remote_devices[name.data64()] = by_name;
+  }
+
+  if (!by_addr || !is_local_ecu(by_addr))
+  {
+    // This slot is empty we need to register New ECU there
+    // or relocate old one
+    // Note: in case if there is some remote device exist under 
+    // requested address the thser function will remove it from the map
+    bus_map.insert(message->sa(), name.data64(), by_name);
+  }
+  else if (is_local_ecu(by_addr))
+  {
+    // Address Collision - We need to activate ISO 11783-5 address negotiation protocol
+    LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(by_addr);
+
+    // Note: we don't process name == name situation, since it will be 
+    // processed by the code above  
+    if (local->name().data64() < name.data64())
     {
-      if (local->name().data64() < name.data64())
+      // address claim
+      local->claim_address(ecu_right.second.first, bus_name);
+    }
+    else if (local->name().data64() > name.data64())
+    {
+      // Ok here we are trying to change our address, but first
+      // we will need to put remote device back to the map
+      bus_map.insert(message->sa(), name.data64(), by_name);
+
+      if (!local->name().is_self_configurable())
       {
-        // address claim
-        local->claim_address(ecu_right.second.first, bus_name);
-      }
-      else if (local->name().data64() == name.data64())
-      {
-        // impossible situation, however we have to remove
-        // local device from the database to avoid collisions
+        // Local device address is not self configurable,
+        // So we disable it for current bus
         bus_map.erase_right(local->name().data64());
+        local->claim_address(NULL_CAN_ADDRESS, bus_name);
       }
-      else if (local->name().data64() > name.data64())
+      else
       {
-        if (!local->name().is_self_configurable())
+        uint8_t sa = find_free_address(bus_map);
+        if (sa == NULL_CAN_ADDRESS)
         {
-          // Local device address is not self configurable,
-          // So we disable it for current bus
+          // Reached the end of all attemts
           bus_map.erase_right(local->name().data64());
           local->claim_address(NULL_CAN_ADDRESS, bus_name);
         }
         else
         {
-          uint8_t sa = find_free_address(bus_map);
-          bus_map.erase_right(local->name().data64());
-          if (sa == NULL_CAN_ADDRESS)
-          {
-            // Reached the end of all attemts
-            local->claim_address(NULL_CAN_ADDRESS, bus_name);
-          }
-          else
-          {
-            bus_map.insert(sa, local->name().data64(), local);
-            local->claim_address(sa, bus_name);
-          }
+          bus_map.insert(sa, local->name().data64(), local);
+          local->claim_address(sa, bus_name);
         }
       }
     }
@@ -231,6 +263,26 @@ void CanDeviceDatabase::pgn_received(CanMessagePtr message,const std::string& bu
  */
 bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address)
 {
+  CanBusStatus stat = _processor->get_bus_status(bus);
+  if (stat == eBusInactive)
+    return false;
+  
+  if (stat != eBusActive)
+  {
+    _processor->register_bus_callback(bus,[this,ecu,address](const std::string& bus_name, CanBusStatus status)
+    {
+      if (status == eBusInactive)
+        return true;
+      
+      if (status != eBusActive)
+        return false; // Waiting state
+
+      add_local_ecu(ecu, bus_name, address);      
+    });
+
+    return true;
+  }
+
   auto bus_map = _device_map.find(bus);
   if (bus_map == _device_map.end())
     return false;
@@ -315,4 +367,5 @@ uint8_t CanDeviceDatabase::find_free_address(BusMap& bus_map)
 
 } // can
 } // brt
+
 

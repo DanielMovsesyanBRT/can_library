@@ -45,16 +45,21 @@ public:
           std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
 
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address);
-
 private:
           void                    pgn_received(CanMessagePtr,const std::string& bus_name);
           uint8_t                 find_free_address(BusMap& bus_map);
+          
+          bool                    is_local_ecu(CanECUPtr ecu) 
+          { return std::dynamic_pointer_cast<LocalECU>(ecu).get() != nullptr; }
+
+          bool                    is_remote_ecu(CanECUPtr ecu) 
+          { return std::dynamic_pointer_cast<RemoteECU>(ecu).get() != nullptr; }
 
 private:
   CanProcessor*                   _processor;
   
   DeviceMap                       _device_map;
-  std::unordered_set<CanECUPtr>   _local_devices;
+  std::unordered_map<uint64_t,CanECUPtr> _remote_devices;
 };
 
 } // can

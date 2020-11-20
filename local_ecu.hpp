@@ -39,9 +39,9 @@ public:
   LocalECU(CanProcessor*,const CanName& name = CanName());
   virtual ~LocalECU();
 
-          void                    claim_address(uint8_t address,const std::string& bus);
+          void                    claim_address(uint8_t address,const std::string& bus_name);
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
-          void                    disable_device(const std::string& bus);
+          void                    disable_device(const std::string& bus_name);
 private:
 
   /**
@@ -58,16 +58,16 @@ private:
     RemoteECUPtr                    _remote;
   };
 
-  struct BusStatus
+  struct Container
   {
-    BusStatus() : _status(eInavtive), _time_tag(0ULL) {}
+    Container() : _status(eInavtive), _time_tag(0ULL) {}
     ECUStatus                       _status;
     uint64_t                        _time_tag;
     std::deque<Queue>               _fifo;
   };
   
-  typedef std::unordered_map<std::string,BusStatus> StatusMap;
-  StatusMap                       _bus_status;
+  typedef std::unordered_map<std::string,Container> ContainerMap;
+  ContainerMap                    _container_map;
 };
 
 
