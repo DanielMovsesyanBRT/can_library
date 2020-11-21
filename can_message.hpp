@@ -57,10 +57,10 @@ public:
     memcpy(_data, data, _dlc);
     _unique_id = _unique_counter++;
 
-    _id = ((priority & 3) << 26) | ((pgn & 0x3FFFF) << 8) | sa;
+    _id = ((priority & 7) << 26) | ((pgn & 0x3FFFF) << 8) | sa;
     if (is_pdu1())
     {
-      _id &= ~(0xFFFF00FF);
+      _id &= ~0xFF00;
       _id |= (da << 8);
     }
   }
@@ -81,10 +81,10 @@ public:
     memcpy(_data, data.data(), _dlc);
     _unique_id = _unique_counter++;
 
-    _id = ((priority & 3) << 26) | ((pgn & 0x3FFFF) << 8) | sa;
+    _id = ((priority & 7) << 26) | ((pgn & 0x3FFFF) << 8) | sa;
     if (is_pdu1())
     {
-      _id &= ~(0xFFFF00FF);
+      _id &= ~0xFF00;
       _id |= (da << 8);
     }
   }

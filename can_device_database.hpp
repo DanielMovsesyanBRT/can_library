@@ -35,7 +35,6 @@ public:
   CanDeviceDatabase(CanProcessor*);
   virtual ~CanDeviceDatabase();
 
-          void                    initialize();
           void                    create_bus(const std::string& bus_name);  
 
           CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus) const;
@@ -44,7 +43,7 @@ public:
           std::unordered_map<std::string,uint8_t> get_ecu_source_addresses(const CanName& ecu_name) const;
           std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
 
-          bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus,uint8_t address);
+          bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
 private:
           void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
           uint8_t                 find_free_address(BusMap& bus_map);
@@ -57,6 +56,7 @@ private:
 
 private:
   CanProcessor*                   _processor;
+  mutable Mutex                   _mutex;
   
   DeviceMap                       _device_map;
   std::unordered_map<uint64_t,CanECUPtr> _remote_devices;

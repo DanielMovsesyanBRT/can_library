@@ -137,6 +137,7 @@ public:
 
   virtual void                    lock();
   virtual void                    unlock();
+          CanProcessor*           processor() { return _processor; }
 
 private:
   uint32_t                        _mutex_id;
@@ -155,8 +156,10 @@ public:
 
   virtual void                    lock();
   virtual void                    unlock();
+
 private:
-  std::atomic_uint_fast32_t       _lock_counter;
+  std::atomic_uint32_t            _lock_counter;
+  std::atomic_uint32_t            _thread_id;
 };
 
 

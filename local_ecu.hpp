@@ -11,6 +11,7 @@
 #include "can_ecu.hpp"
 #include "remote_ecu.hpp"
 #include "can_message.hpp"
+#include "can_utils.hpp"
 
 #include <deque>
 #include <unordered_map>
@@ -42,8 +43,9 @@ public:
           void                    claim_address(uint8_t address,const std::string& bus_name);
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
           void                    disable_device(const std::string& bus_name);
-private:
 
+private:
+  Mutex                           _mutex;
   /**
    * \struct Queue
    *

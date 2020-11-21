@@ -33,7 +33,7 @@ Mutex::~Mutex()
 }
 
 /**
- * \fn  Mutex::lock
+ * \fn  Mutex::on_lock
  *
  */
 void Mutex::lock()
@@ -58,6 +58,7 @@ void Mutex::unlock()
 RecoursiveMutex::RecoursiveMutex(CanProcessor* processor)
 : Mutex(processor)
 , _lock_counter(0)
+, _thread_id((uint32_t)-1)
 {
 
 }
@@ -68,6 +69,16 @@ RecoursiveMutex::RecoursiveMutex(CanProcessor* processor)
  */
 void RecoursiveMutex::lock()
 {
+  if (_thread_id.load() == processor()->get_current_thread_id())
+  {
+    _lock_counter++;    
+  }
+  else
+  {
+    Mutex::lock();
+    _thread_id.store(processor()->get_current_thread_id());
+    _lock_counter = 1;
+  }
 }
 
 /**
@@ -76,7 +87,16 @@ void RecoursiveMutex::lock()
  */
 void RecoursiveMutex::unlock()
 {
-
+  if (_lock_counter.load() > 1)
+  {
+    _lock_counter--;
+  }
+  else
+  {
+    _thread_id.store((uint32_t)-1);
+    _lock_counter.store(0);
+    Mutex::unlock();
+  }
 }
 
 

@@ -17,6 +17,7 @@
 #include <deque>
 #include <list>
 
+#include "can_utils.hpp"
 #include "can_message.hpp"
 #include "local_ecu.hpp"
 #include "remote_ecu.hpp"
@@ -55,17 +56,12 @@ enum CanMessageConfirmation
  */
 class CanProcessor  
 {
-  CanProcessor();
-  virtual ~CanProcessor();
-
 public:
   typedef std::function<void(uint64_t,CanMessageConfirmation)>      ConfirmationCallback;
   typedef std::function<void(const CanPacket&,const std::string&)>  PGNCallback;
   typedef std::function<bool()>                                     UpdateCallback;
   typedef std::function<bool(const std::string&,CanBusStatus)>      BusStatusCallback;
 
-  static  CanProcessor*           get() { return &_object; }
-  
   /**
    * \class Callback
    *
@@ -80,12 +76,14 @@ public:
 
     virtual uint32_t                create_mutex() = 0;
     virtual void                    delete_mutex(uint32_t) = 0;
-    
     virtual void                    lock_mutex(uint32_t) = 0;
     virtual void                    unlock_mutex(uint32_t) = 0;
+    virtual uint32_t                get_current_thread_id() const = 0;
   };
 
-          bool                    initialize(Callback*);
+  CanProcessor(Callback*);
+  virtual ~CanProcessor();
+
           void                    update();
           uint64_t                get_time_tick() const { return (_cback != nullptr)?_cback->get_time_tick():0ULL;}
 
@@ -113,10 +111,11 @@ public:
           void                    delete_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->delete_mutex(mtx_id); }
           void                    lock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->lock_mutex(mtx_id); }
           void                    unlock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->unlock_mutex(mtx_id); }
+          uint32_t                get_current_thread_id() const { if (_cback != nullptr) return _cback->get_current_thread_id(); }
 
 private:
-  static  CanProcessor            _object;
   Callback*                       _cback;
+  mutable RecoursiveMutex         _mutex;
   CanDeviceDatabase               _device_db;
 
   /**
@@ -154,6 +153,7 @@ private:
   
   std::list<PacketConfirmation>   _confirm_callbacks;
   std::list<UpdateCallback>       _updaters;
+
 };
 
 
