@@ -37,13 +37,15 @@ public:
 
           void                    create_bus(const std::string& bus_name);  
 
-          CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus) const;
+          CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus_name) const;
           CanECUPtr               get_ecu_by_name(const CanName& ecu_name) const;
 
-          std::unordered_map<std::string,uint8_t> get_ecu_source_addresses(const CanName& ecu_name) const;
+          uint8_t                 get_ecu_address(const CanName& ecu_name,const std::string& bus_name) const;
           std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
 
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
+          std::vector<LocalECUPtr> get_local_ecus(const std::string& bus_name = "");
+
 private:
           void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
           uint8_t                 find_free_address(BusMap& bus_map);

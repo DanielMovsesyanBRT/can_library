@@ -110,20 +110,18 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name) const
  * @param  ecu_name : const CanName& 
  * @return  std::unordered_map<std::string,uint8_t>
  */
-std::unordered_map<std::string,uint8_t> CanDeviceDatabase::get_ecu_source_addresses(const CanName& ecu_name) const
+uint8_t CanDeviceDatabase::get_ecu_address(const CanName& ecu_name,const std::string& bus_name) const
 {
-  std::unordered_map<std::string,uint8_t> result;
-
   std::lock_guard<Mutex> l(_mutex);
-  for (auto bus_iter : _device_map)
-  {
-    auto device = bus_iter.second.find_right(ecu_name.data64());
-    if (!device.first)
-      continue;
+  auto bus = _device_map.find(bus_name);
+  if (bus == _device_map.end())
+    return NULL_CAN_ADDRESS;
 
-    result[bus_iter.first] = device.second.first;
-  }
-  return result;
+  auto addr = bus->second.find_right(ecu_name.data64());
+  if (!addr.first)
+    return NULL_CAN_ADDRESS;
+
+  return addr.second.first;
 }
 
 /**
@@ -161,6 +159,8 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
 
   uint8_t sa = BROADCATS_CAN_ADDRESS;
   LocalECUPtr local;
+  RemoteECUPtr remote;
+
   {
     std::lock_guard<Mutex> l(_mutex);
     auto bus_iter = _device_map.find(bus_name);
@@ -206,7 +206,8 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
     // Check if this is a new Remote device sending address claim
     if (!is_remote_ecu(by_name))
     { 
-      by_name.reset(new RemoteECU(_processor, name));
+      remote.reset(new RemoteECU(_processor, name));
+      by_name = remote;
       
       // Register new device iin the Remote Database
       _remote_devices[name.data64()] = by_name;
@@ -229,8 +230,9 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
       // processed by the code above  
       if (local->name().data64() < name.data64())
       {
-        // address claim
-        sa = ecu_right.second.first;
+        // Keep the same address, which is source
+        // address of received packet
+        sa = packet.sa();
       }
       else if (local->name().data64() > name.data64())
       {
@@ -264,6 +266,9 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
 
   if (local && (sa != BROADCATS_CAN_ADDRESS))
     local->claim_address(sa, bus_name);
+
+  if (remote)
+    _processor->on_remote_ecu(remote, bus_name);
 }
 
 /**
@@ -357,6 +362,44 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
     ecu->claim_address(address, bus_name);
 
   return true;
+}
+
+/**
+ * \fn  get_local_ecus
+ *
+ * @param  & bus_name : const std::string
+ * @return  std::vector<LocalECUPtr
+ */
+std::vector<LocalECUPtr> CanDeviceDatabase::get_local_ecus(const std::string& bus_name /*= ""*/)
+{
+  std::vector<LocalECUPtr> result;
+  std::lock_guard<Mutex> l(_mutex);
+
+  if (bus_name.empty())
+  {
+    for (auto bus_map : _device_map)
+    {
+      for (auto device : bus_map.second)
+      {
+        if (is_local_ecu(device.second.second))
+          result.push_back(std::dynamic_pointer_cast<LocalECU>(device.second.second));
+      }
+    }
+  }
+  else
+  {
+    auto bus_map = _device_map.find(bus_name);
+    if (bus_map != _device_map.end())
+    {
+      for (auto device : bus_map->second)
+      {
+        if (is_local_ecu(device.second.second))
+          result.push_back(std::dynamic_pointer_cast<LocalECU>(device.second.second));
+      }
+    }
+  }
+
+  return result;
 }
 
 /**

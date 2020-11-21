@@ -31,8 +31,7 @@ public:
           std::shared_ptr<CanECU> getptr() { return shared_from_this(); }
           const CanName&          name() const { return _name; }
 
-          std::unordered_map<std::string,uint8_t> 
-                                  get_addresses() const;
+          uint8_t                 get_address(const std::string& bus_name) const;
 
 private:
   CanProcessor*                   _processor;

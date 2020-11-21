@@ -22,8 +22,6 @@ class RemoteECU  : public CanECU
 public:
   RemoteECU(CanProcessor*,const CanName& name = CanName());
   virtual ~RemoteECU();
-
-  uint8_t                         get_address() const;
 };
 
 typedef std::shared_ptr<RemoteECU> RemoteECUPtr;

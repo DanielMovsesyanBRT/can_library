@@ -33,22 +33,6 @@ RemoteECU::~RemoteECU()
 
 }
 
-
-/**
- * \fn  RemoteECU::get_address
- *
- * @return  uint8_t
- */
-uint8_t RemoteECU::get_address() const
-{
-  std::unordered_map<std::string,uint8_t> sa_map = get_addresses();
-  if (sa_map.size() != 1)
-    return NULL_CAN_ADDRESS;
-
-  return sa_map.begin()->second;
-}
-
-
 } // can
 } // brt
 

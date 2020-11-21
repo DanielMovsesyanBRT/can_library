@@ -80,18 +80,21 @@ void CanProcessor::update()
 }
 
 /**
- * \fn  CanProcessor::init_bus
+ * \fn  CanProcessor::register_can_bus
  *
  * @param  bus : const std::string&
  * @return  bool
  */
-bool CanProcessor::init_bus(const std::string& bus_name)
+bool CanProcessor::register_can_bus(const std::string& bus_name)
 {
   if (_cback == nullptr)
     return false;
 
-  if (_bus_map.find(bus_name) != _bus_map.end())
-    return false;
+  {
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    if (_bus_map.find(bus_name) != _bus_map.end())
+      return false;
+  }
 
   // Request for address Claimed
   CanPacket packet({00,0xEE,00}, PGN_Request, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
@@ -108,8 +111,8 @@ bool CanProcessor::init_bus(const std::string& bus_name)
     if (!result.second)
       return false;
  
-  // Register callback for this message to process BUS activation 
-  _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(),
+    // Register callback for this message to process BUS activation 
+    _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(),
            [this](uint64_t packet_id,CanMessageConfirmation status) 
       {
         std::lock_guard<RecoursiveMutex> l(_mutex);
@@ -135,11 +138,42 @@ bool CanProcessor::init_bus(const std::string& bus_name)
           }
         }
       }));
+
+    if (_bus_map.size() == 1)
+    {
+      register_pgn_receiver(PGN_Request,[this](const CanPacket& packet,const std::string& bus_name)
+      {  on_request(packet,bus_name); });
+    }
   }
 
   _device_db.create_bus(bus_name);
   _cback->send_can_packet(bus_name, packet);
   return true;
+}
+
+/**
+ * \fn  CanProcessor::on_request
+ *
+ * @param  packet : const CanPacket& 
+ * @param  & bus_name : const std::string
+ */
+void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_name)
+{
+  if (packet.is_broadcast())
+  {
+    std::vector<LocalECUPtr> ecus = _device_db.get_local_ecus(bus_name);
+    for (auto ecu : ecus)
+    {
+      if (ecu)
+        ecu->claim_address(ecu->get_address(bus_name), bus_name);
+    }
+  }
+  else
+  {
+    LocalECUPtr ecu = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    if (ecu)
+      ecu->claim_address(ecu->get_address(bus_name), bus_name);
+  }
 }
 
 /**

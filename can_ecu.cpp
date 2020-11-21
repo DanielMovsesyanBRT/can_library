@@ -35,13 +35,14 @@ CanECU::~CanECU()
 }
 
 /**
- * \fn  CanECU::get_addresses
+ * \fn  CanECU::get_address
  *
- * @return  std::unordered_map<std::string,uint8_t>
+ * @param  & bus_name : const std::string
+ * @return  uint8_t
  */
-std::unordered_map<std::string,uint8_t> CanECU::get_addresses() const
+uint8_t CanECU::get_address(const std::string& bus_name) const
 {
-  return _processor->device_db().get_ecu_source_addresses(name());
+  return _processor->device_db().get_ecu_address(name(), bus_name);
 }
 
 } // can

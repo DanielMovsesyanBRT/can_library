@@ -110,7 +110,6 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
  */
 bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
 {
-  std::unordered_map<std::string,uint8_t> sa_map = get_addresses();
   std::vector<std::pair<std::string,uint8_t>> bus_address;
   bool pushed_to_fifo = false;
   {
@@ -120,10 +119,6 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
       // broadcast
       for (auto container : _container_map)
       {
-        auto sa = sa_map.find(container.first);
-        if (sa == sa_map.end())
-          continue;
-
         if (container.second._status == eInavtive)
           continue;
 
@@ -144,8 +139,8 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
         if (container == _container_map.end())
           continue;
 
-        auto sa = sa_map.find(buses[0]);
-        if (sa == sa_map.end())
+        uint8_t sa = remote->get_address(bus_name);
+        if (sa == NULL_CAN_ADDRESS)
           continue;
 
         if (container->second._status == eInavtive)
@@ -158,7 +153,7 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
           continue;
         }
 
-        bus_address.push_back(std::pair<std::string,uint8_t>(bus_name, sa->second));
+        bus_address.push_back(std::pair<std::string,uint8_t>(bus_name, sa));
       }
     }
   }
@@ -170,8 +165,9 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
   {
     if (message->length() <= 8)
     {
-      if (!processor()->send_raw_packet(CanPacket(message->data(),message->pgn(),
-                    remote->get_address(),ba.second,message->priority()), ba.first))
+      uint8_t sa = get_address(ba.first);
+      if ((sa != NULL_CAN_ADDRESS) && !processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
+                                                      message->pgn(), sa, ba.second, message->priority()), ba.first))
         return false;
     }
   }

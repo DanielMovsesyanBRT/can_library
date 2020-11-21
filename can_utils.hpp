@@ -116,6 +116,11 @@ public:
     return std::pair<bool, value_type2>(true,right->second);
   }
 
+  typename Map1::iterator begin() { return _map1.begin(); }
+  typename Map1::iterator end() { return _map1.end(); }
+
+  typename Map1::const_iterator begin() const { return _map1.begin(); }
+  typename Map1::const_iterator end() const { return _map1.end(); }
 
 private:
 
