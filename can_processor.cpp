@@ -285,7 +285,17 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
   if (_cback == nullptr)
     return false;
 
+  LocalECUPtr   local;
+  if (!packet.is_broadcast())
   {
+    // First we need to check whether this packet is sent to any of our local devices
+    local = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    if (!local)
+      return false; // Not our message
+  }
+
+  {
+    // Now check whether the PGN belongs to one of the listeners e.g Request Address Claimed, TP, ETP
     std::lock_guard<RecoursiveMutex> l(_mutex);
     auto pgn_receiver = _pgn_receivers.find(packet.pgn());
     if (pgn_receiver != _pgn_receivers.end())
@@ -295,22 +305,62 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
     }
   }
 
-  LocalECUPtr   local;
   RemoteECUPtr  remote;
-  // Is this our message
-  if (!packet.is_broadcast())
-  {
-    local = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
-    if (!local)
-      return false; // Not our message
-  }
-
   if (packet.sa() < NULL_CAN_ADDRESS)
     remote = std::dynamic_pointer_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus_name));
 
   _cback->message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote);
   return true;
 }
+
+/**
+ * \fn  CanProcessor::send_can_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  local : LocalECUPtr 
+ * @param  remote : RemoteECUPtr 
+ * @return  bool
+ */
+bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote)
+{
+  if (!local)
+    return false;
+
+  if (!remote)
+    return send_can_message(message,local,get_all_buses());
+
+  if (message->length() <= 8)
+    return local->send_message(message, remote);
+  
+  // todo: other protocols
+  return false;
+}
+
+/**
+ * \fn  CanProcessor::send_can_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  local : LocalECUPtr 
+ * @param  >& buses : const std::vector<std::string
+ * @return  bool
+ */
+bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,const std::vector<std::string>& buses)
+{
+  if (!local)
+    return false;
+
+  if (message->length() <= 8)
+  {
+    for (auto bus_name : buses)
+      local->send_message(message, bus_name);
+
+    return true;
+  }
+
+  // todo: other protocols
+  return false;
+}
+
 
 /**
  * \fn  CanProcessor::can_packet_confirm

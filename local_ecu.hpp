@@ -19,6 +19,7 @@
 namespace brt {
 namespace can {
 
+class CanDeviceDatabase;
 /**
  * \class LocalECU
  *
@@ -26,6 +27,8 @@ namespace can {
 class LocalECU : public CanECU
 {
 public:
+friend CanProcessor;
+friend CanDeviceDatabase;
   /**
    * \enum ECUStatus
    *
@@ -40,9 +43,12 @@ public:
   LocalECU(CanProcessor*,const CanName& name = CanName());
   virtual ~LocalECU();
 
+private:
           void                    claim_address(uint8_t address,const std::string& bus_name);
-          bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
           void                    disable_device(const std::string& bus_name);
+
+          bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
+          bool                    send_message(CanMessagePtr message,const std::string& bus_name);
 
 private:
   Mutex                           _mutex;
@@ -52,12 +58,19 @@ private:
    */
   struct Queue
   {
-    Queue(CanMessagePtr message,RemoteECUPtr remote)
+    explicit Queue(CanMessagePtr message,RemoteECUPtr remote)
     : _message(message)
     , _remote(remote)
     {}  
+
+    explicit Queue(CanMessagePtr message,const std::string& bus_name)
+    : _message(message)
+    , _bus_name(bus_name)
+    {}
+
     CanMessagePtr                   _message;
     RemoteECUPtr                    _remote;
+    std::string                     _bus_name;
   };
 
   struct Container

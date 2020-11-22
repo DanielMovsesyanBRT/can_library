@@ -93,6 +93,9 @@ public:
           std::vector<std::string> get_all_buses() const;
   
           bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
+          bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote);
+          bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,const std::vector<std::string>& buses);
+
           LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
                                             const std::vector<std::string>& desired_buses = std::vector<std::string>());

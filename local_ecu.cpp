@@ -110,70 +110,78 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
  */
 bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
 {
+  if (!remote)
+    return false;
+
   std::vector<std::pair<std::string,uint8_t>> bus_address;
-  bool pushed_to_fifo = false;
   {
     std::lock_guard<Mutex> l(_mutex);
-    if (!remote)
+    std::vector<std::string> buses = processor()->device_db().get_ecu_bus(remote->name());
+    for (auto bus_name : buses)
     {
-      // broadcast
-      for (auto container : _container_map)
+      auto container = _container_map.find(bus_name);
+      if (container == _container_map.end())
+        continue;
+
+      uint8_t sa = remote->get_address(bus_name);
+      if (sa == NULL_CAN_ADDRESS)
+        continue;
+
+      if (container->second._status == eInavtive)
+        continue;
+
+      if (container->second._status == eWaiting)
       {
-        if (container.second._status == eInavtive)
-          continue;
-
-        if (container.second._status == eWaiting)
-        {
-          container.second._fifo.push_back(Queue(message, remote));
-          continue;
-        }
-        bus_address.push_back(std::pair<std::string,uint8_t>(container.first, BROADCATS_CAN_ADDRESS));
+        container->second._fifo.push_back(Queue(message, remote));
+        continue;
       }
-    }
-    else
-    {
-      std::vector<std::string> buses = processor()->device_db().get_ecu_bus(remote->name());
-      for (auto bus_name : buses)
-      {
-        auto container = _container_map.find(bus_name);
-        if (container == _container_map.end())
-          continue;
 
-        uint8_t sa = remote->get_address(bus_name);
-        if (sa == NULL_CAN_ADDRESS)
-          continue;
-
-        if (container->second._status == eInavtive)
-          continue;
-
-        if (container->second._status == eWaiting)
-        {
-          container->second._fifo.push_back(Queue(message, remote));
-          pushed_to_fifo = true;
-          continue;
-        }
-
-        bus_address.push_back(std::pair<std::string,uint8_t>(bus_name, sa));
-      }
+      bus_address.push_back(std::pair<std::string,uint8_t>(bus_name, sa));
     }
   }
 
-  if (bus_address.empty() && !pushed_to_fifo)
+  if (bus_address.empty())
     return false;
 
   for (auto ba : bus_address)
   {
-    if (message->length() <= 8)
-    {
-      uint8_t sa = get_address(ba.first);
-      if ((sa != NULL_CAN_ADDRESS) && !processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
-                                                      message->pgn(), sa, ba.second, message->priority()), ba.first))
-        return false;
-    }
+    if (!processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
+                                                    message->pgn(), get_address(ba.first), ba.second, message->priority()), ba.first))
+      return false;
   }
 
   return true;
 }
+
+/**
+ * \fn  LocalECU::send_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  & bus_name : const std::string
+ * @return  bool
+ */
+bool LocalECU::send_message(CanMessagePtr message,const std::string& bus_name)
+{
+  {
+    std::lock_guard<Mutex> l(_mutex);
+    auto container = _container_map.find(bus_name);
+    if (container == _container_map.end())
+      return false;
+
+    if (container->second._status == eInavtive)
+      return false;
+
+    if (container->second._status == eWaiting)
+    {
+      container->second._fifo.push_back(Queue(message, bus_name));
+      return true;
+    }
+  }
+    
+  return processor()->send_raw_packet(CanPacket(message->data(), message->length(), message->pgn(),BROADCATS_CAN_ADDRESS, 
+                          get_address(bus_name), message->priority()), bus_name);
+}
+
 
 /**
  * \fn  LocalECU::disable_device
