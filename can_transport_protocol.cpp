@@ -59,13 +59,12 @@ void SendBAM::update()
                   std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(0), static_cast<uint8_t>(num_packets))));
       }   
       else
-      {
         me->session()->change_action(me, ActionPtr());
-      }
+
     });
 
 
-  if (!session()->processor()->send_can_message(msg, session()->local(), std::vector<std::string>(1, session()->bus_name())))
+  if (!session()->processor()->send_can_message(msg, session()->local(), RemoteECUPtr(), std::vector<std::string>(1, session()->bus_name())))
     session()->change_action(me, ActionPtr());
 }
 
@@ -110,14 +109,12 @@ void SendData::update()
   CanMessagePtr msg(data, PGN_TP_DT, 7, 
     [me](uint64_t,const std::string& bus_name,bool success)
     {
+      // Callback for message sent
       if (success)
-      {
         me->session()->update();
-      }   
       else
-      {
         me->session()->change_action(me, ActionPtr());
-      }
+
     });
 
   _time_tag = session()->processor()->get_time_tick();
@@ -130,11 +127,17 @@ void SendData::update()
     }
     else
     {
-      /// TODO: 
+      uint16_t total_size = static_cast<uint16_t>(session()->message()->length());
+      uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
+      
+      if (_current < num_packets)
+        session()->change_action(getptr(), std::make_shared<WaitCTS>(session()));
+      else
+        session()->change_action(getptr(), std::make_shared<WaitEOM>(session()));
     }
   }
 
-  if (!session()->processor()->send_can_message(msg, session()->local(), std::vector<std::string>(1, session()->bus_name())))
+  if (!session()->processor()->send_can_message(msg, session()->local(), session()->remote(), std::vector<std::string>(1, session()->bus_name())))
     session()->change_action(me, ActionPtr());
 }
 
@@ -149,7 +152,9 @@ void SendData::pgn_received(const CanPacket& packet)
   if (session()->is_broadcast())
     return; // Not expecting anything at all
 
-  //if (packet)
+  if (packet.data()[0] == CTS)
+    session()->abort(AbortCTSWhileSending);
+
 }
 
 /**
@@ -165,6 +170,7 @@ void SendRTS::update()
   uint16_t total_size = static_cast<uint16_t>(session()->message()->length());
   uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
 
+  auto me = getptr();
   CanMessagePtr msg( 
     {
       static_cast<uint8_t>(RTS), 
@@ -176,20 +182,17 @@ void SendRTS::update()
       static_cast<uint8_t>((session()->message()->pgn() >> 8) & 0xFF),
       static_cast<uint8_t>((session()->message()->pgn() >> 16) & 0xFF),
     }, PGN_TP_CM, 7,
-    [this, num_packets](uint64_t,const std::string& bus_name,bool success)
+    [me, num_packets](uint64_t,const std::string& bus_name,bool success)
     {
       if (success)
-      {
-        session()->change_action(getptr(), std::make_shared<WaitCTS>(session()));
-      }   
+        me->session()->change_action(me, std::make_shared<WaitCTS>(me->session()));
       else
-      {
-        session()->change_action(getptr(), ActionPtr());
-      }
-      session()->update();
+        me->session()->change_action(me, ActionPtr());
+      
+      me->session()->update();
     });
 
-  if (!session()->processor()->send_can_message(msg, session()->local(), std::vector<std::string>(1, session()->bus_name())))
+  if (!session()->processor()->send_can_message(msg, session()->local(), session()->remote()))
     session()->change_action(getptr(), ActionPtr());
 }
 
@@ -213,10 +216,8 @@ WaitCTS::WaitCTS(TransmitSession* session)
 void WaitCTS::update()
 {
   if ((session()->processor()->get_time_tick() - _time_tag) > TRANSPORT_TIMEOUT_T3)
-  {
-    // todo: abort
-    session()->change_action(getptr(), ActionPtr());
-  }
+    session()->abort(AbortTimeout);
+
 }
 
 /**
@@ -226,30 +227,58 @@ void WaitCTS::update()
  */
 void WaitCTS::pgn_received(const CanPacket& packet)
 {
-  if ((packet.pgn() == PGN_TP_CM) && (packet.dlc() == 8))
+  if (packet.data()[0] == CTS)
   {
-    if (packet.data()[0] == CTS)
+    uint32_t pgn = packet.data()[5] | (packet.data()[6] << 8) | (packet.data()[7] << 8);
+    if (pgn != session()->message()->pgn())
     {
-      uint32_t pgn = packet.data()[5] | (packet.data()[6] << 8) | (packet.data()[7] << 8);
-      if (pgn != session()->message()->pgn())
-      {
-        // todo: abort
-        session()->change_action(getptr(), ActionPtr());
-        return;
-      }
-
-      uint8_t num_packets = packet.data()[1];
-      uint8_t next_packet = packet.data()[2];
-
-      session()->change_action(getptr(), std::make_shared<SendData>(session(),
-                std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(num_packets), static_cast<uint8_t>(num_packets + next_packet))));
-    }
-    else if (packet.data()[0] == Abort)
-    {
+      // todo: abort
       session()->change_action(getptr(), ActionPtr());
+      return;
     }
+
+    uint8_t num_packets = packet.data()[1];
+    uint8_t next_packet = packet.data()[2];
+
+    session()->change_action(getptr(), std::make_shared<SendData>(session(),
+              std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(num_packets), static_cast<uint8_t>(num_packets + next_packet))));
+  }
+  else if (packet.data()[0] == Abort)
+  {
+    session()->change_action(getptr(), ActionPtr());
   }
 }
+
+/**
+ *************************** TransmitSession
+ */
+
+
+/**
+ * \fn  WaitEOM::update
+ *
+ */
+void WaitEOM::update()
+{
+  if ((session()->processor()->get_time_tick() - _time_tag) > TRANSPORT_TIMEOUT_T3)
+  {
+    session()->change_action(getptr(), ActionPtr());
+  }
+}
+
+/**
+ * \fn  WaitEOM::pgn_received
+ *
+ * @param  packet : const CanPacket& 
+ */
+void WaitEOM::pgn_received(const CanPacket& packet)
+{
+  if (packet.data()[0] == CTS)
+    WaitCTS::pgn_received(packet);
+  else if (packet.data()[0] == EOM)
+    session()->change_action(getptr(), ActionPtr());
+}
+
 
 /**
  *************************** TransmitSession
@@ -262,6 +291,7 @@ void WaitCTS::pgn_received(const CanPacket& packet)
  */
 bool TransmitSession::update()
 {
+  std::lock_guard<Mutex> lock(*_mutex);
   if (!_action)
     return true;
 
@@ -277,6 +307,7 @@ bool TransmitSession::update()
  */
 bool TransmitSession::pgn_received(const CanPacket& packet)
 {
+  std::lock_guard<Mutex> lock(*_mutex);
   if (!_action)
     return true;
 
@@ -291,8 +322,35 @@ bool TransmitSession::pgn_received(const CanPacket& packet)
  */
 void TransmitSession::change_action(ActionPtr old_action,ActionPtr new_action)
 {
+  std::lock_guard<Mutex> lock(*_mutex);
   if (_action == old_action)
     _action = new_action;
+}
+
+/**
+ * \fn  TransmitSession::abort
+ *
+ * @param  reason : uint8_t 
+ */
+void TransmitSession::abort(uint8_t reason)
+{
+  if (!is_broadcast())
+  {
+    CanMessagePtr msg( 
+      {
+        static_cast<uint8_t>(Abort), 
+        static_cast<uint8_t>(reason),
+        0xFF, 0xFF, 0xFF,
+        static_cast<uint8_t>(_message->pgn() & 0xFF),
+        static_cast<uint8_t>((_message->pgn() >> 8) & 0xFF),
+        static_cast<uint8_t>((_message->pgn() >> 16) & 0xFF),
+      }, PGN_TP_CM, 7);
+
+    _processor->send_can_message(msg, _local, _remote);
+  }
+  
+  std::lock_guard<Mutex> lock(*_mutex);
+  _action.reset();
 }
 
 /**
@@ -329,51 +387,24 @@ CanTransportProtocol::~CanTransportProtocol()
  * @param  message : CanMessagePtr 
  * @param  local :  LocalECUPtr 
  * @param  remote :  RemoteECUPtr 
+ * @param  & bus_name :  const std::string
  * @return  bool
  */
-bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote)
+bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
 {
   if ((message->length() <= 8) || (message->length() > 1785))
     return false;
 
-  auto buses = processor()->device_db().get_ecu_bus(remote->name());
-  for (auto bus : buses)
-  {
-    std::lock_guard<Mutex> lock(_mutex);
-    TransmitSessionPtr new_session = std::make_shared<TransmitSession>(processor(), message,local, remote, bus);
-    if (_active_session.find(new_session) == _active_session.end())
-      _active_session.insert(new_session);
-    else
-      _session_queue.push_back(new_session);
-  }
+  std::lock_guard<Mutex> lock(_mutex);
+  TransmitSessionPtr new_session = std::make_shared<TransmitSession>(processor(), &_mutex,  message,local, remote, bus_name);
+  if (_active_session.find(new_session) == _active_session.end())
+    _active_session.insert(new_session);
+  else
+    _session_queue.push_back(new_session);
   
   return true;
 }
 
-/**
- * \fn  CanTransportProtocol::send_message
- *
- * @param  message : CanMessagePtr 
- * @param  local :  LocalECUPtr 
- * @param  >& buses :  const std::vector<std::string
- * @return  bool
- */
-bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses)
-{
-  if ((message->length() <= 8) || (message->length() > 1785))
-    return false;
-
-  for (auto bus : buses)
-  {
-    std::lock_guard<Mutex> lock(_mutex);
-    TransmitSessionPtr new_session = std::make_shared<TransmitSession>(processor(), message, local, RemoteECUPtr(), bus);
-    if (_active_session.find(new_session) == _active_session.end())
-      _active_session.insert(new_session);
-    else
-      _session_queue.push_back(new_session);
-  }
-  return true;
-}
 
 /**
  * \fn  CanTransportProtocol::on_update
@@ -433,6 +464,7 @@ void CanTransportProtocol::on_pg_callback(const CanPacket& packet,const std::str
     switch (packet.data()[0])
     {
     case CTS:
+    case EOM:
       {
         std::lock_guard<Mutex> lock(_mutex);
         auto iter = std::find_if(_active_session.begin(),_active_session.end(),

@@ -346,45 +346,37 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
  *
  * @param  message : CanMessagePtr 
  * @param  local : LocalECUPtr 
- * @param  remote : RemoteECUPtr 
+ * @param  remote  : RemoteECUPtr 
+ * @param  buses : const std::vector<std::string>&
  * @return  bool
  */
-bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote)
+bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
+                            const std::vector<std::string>& buses /*= std::vector<std::string>()*/)
 {
   if (!local)
     return false;
 
-  if (!remote)
-    return send_can_message(message,local,get_all_buses());
+  std::vector<std::string> bss(buses);
 
-  for (auto transport : _transport_stack)
+  if (bss.empty())
+    bss = get_all_buses();
+
+  bool result = false;
+  for (auto bus_name : bss)
   {
-    if (transport->send_message(message, local, remote))
-      return true;
+    for (auto transport : _transport_stack)
+    {
+      if (transport->send_message(message, local, remote, bus_name))
+      {
+        result = true;
+        break;
+      }
+    }
   }
-  return false;
+
+  return result;
 }
 
-/**
- * \fn  CanProcessor::send_can_message
- *
- * @param  message : CanMessagePtr 
- * @param  local : LocalECUPtr 
- * @param  buses : const std::vector<std::string>& 
- * @return  bool
- */
-bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,const std::vector<std::string>& buses)
-{
-  if (!local)
-    return false;
-
-  for (auto transport : _transport_stack)
-  {
-    if (transport->send_message(message, local, buses))
-      return true;
-  }
-  return false;
-}
 
 /**
  * \fn  CanProcessor::SimpleTransport::send_message
@@ -394,34 +386,15 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,cons
  * @param  remote :  RemoteECUPtr 
  * @return  bool
  */
-bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote)
+bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, 
+                                                      RemoteECUPtr remote,const std::string& bus_name)
 {
   if (message->length() > 8)
     return false;
 
-  local->send_message(message, remote);
+  local->send_message(message, remote, bus_name);
   return true;
 }
-
-/**
- * \fn  CanProcessor::SimpleTransport::send_message
- *
- * @param  message : CanMessagePtr 
- * @param  local :  LocalECUPtr 
- * @param  >& buses :  const std::vector<std::string
- * @return  bool
- */
-bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses)
-{
-  if (message->length() > 8)
-    return false;
-
-  for (auto bus_name : buses)
-    local->send_message(message, bus_name);
-
-  return true;
-}
-
 
 /**
  * \fn  CanProcessor::can_packet_confirm

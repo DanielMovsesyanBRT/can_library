@@ -30,8 +30,7 @@ public:
   CanProtocol(CanProcessor* processor);
   virtual ~CanProtocol();
 
-  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote) = 0;        
-  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses) = 0;
+  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& buses) = 0;        
 
           std::shared_ptr<CanProtocol> getptr() { return shared_from_this(); }
           CanProcessor*           processor() { return _processor; }

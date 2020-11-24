@@ -30,6 +30,24 @@ enum TPControlByte
   BAM = 32
 };
 
+/**
+ * \enum TPAbortReason
+ *
+ */
+enum TPAbortReason
+{
+  AbortDuplicateConnection = 1, // Already in one or more connection-managed sessions and cannot support another
+  AbortScarseResources = 2,     // System resources were needed for another task so this connection managed session was terminated
+  AbortTimeout = 3,             // A timeout occurred and this is the connection abort to close the session
+  AbortCTSWhileSending = 4,     // CTS messages received when data transfer is in progress
+  AbortMaxTxRequestLimit = 5,   // Maximum retransmit request limit reached
+  AbortUnexpectedDT = 6,        // Unexpected data transfer packet
+  AbortBadSequenceNumber = 7,   // Bad sequence number (and software is not able to recover)
+  AbortDupSequenceNumber = 8,   // Duplicate sequence number (and software is not able to recover)
+  AbortSizeToBig = 9,           // “Total message size” is greater than 1785 byte
+  AbortUnknown = 250            // If a Connection Abort reason is identified that is not listed in the table use code 250
+};
+
 
 class TransmitSession;
 /**
@@ -121,7 +139,7 @@ public:
 
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
-private:
+protected:
   uint64_t                        _time_tag;
 };
 
@@ -131,16 +149,14 @@ private:
  * Inherited from :
  *             Action 
  */
-class WaitEOM : public Action
+class WaitEOM : public WaitCTS
 {
 public:
-  WaitEOM(TransmitSession* session);
+  WaitEOM(TransmitSession* session) : WaitCTS(session) {}
   virtual ~WaitEOM() {}
 
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
-private:
-  uint64_t                        _time_tag;
 };
 
 
@@ -158,8 +174,8 @@ public:
    * @param  local : LocalECUPtr 
    * @param  remote : RemoteECUPtr 
    */
-  TransmitSession(CanProcessor* processor, CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,const std::string& bus_name)
-  : _processor(processor), _message(message), _local(local), _remote(remote), _bus_name(bus_name)
+  TransmitSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,const std::string& bus_name)
+  : _processor(processor), _mutex(mutex), _message(message), _local(local), _remote(remote), _bus_name(bus_name)
   { 
     if (is_broadcast())
       _action = std::make_shared<SendBAM>(this);
@@ -187,6 +203,7 @@ public:
           bool                    update();
           bool                    pgn_received(const CanPacket& packet);
           void                    change_action(ActionPtr old_action,ActionPtr new_action);
+          void                    abort(uint8_t reason);
   
 public:
 
@@ -225,10 +242,13 @@ public:
 
 protected:
   CanProcessor*                   _processor;
+  Mutex*                          _mutex;
+
   CanMessagePtr                   _message;
   LocalECUPtr                     _local;
   RemoteECUPtr                    _remote;
   std::string                     _bus_name;
+
 
   ActionPtr                       _action;
 };
@@ -247,8 +267,7 @@ public:
   CanTransportProtocol(CanProcessor* processor);
   virtual ~CanTransportProtocol();
 
-  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote);
-  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses);
+  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name);
 
 private:
           bool                    on_update();
@@ -259,7 +278,7 @@ private:
   typedef std::unordered_set<TransmitSessionPtr,TransmitSession::hash> ActiveSessions;
   ActiveSessions                  _active_session;
   std::deque<TransmitSessionPtr>  _session_queue;
-  Mutex                           _mutex;
+  RecoursiveMutex                 _mutex;
 };
 
 } // can

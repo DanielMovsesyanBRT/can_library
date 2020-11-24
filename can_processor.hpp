@@ -93,8 +93,8 @@ public:
           std::vector<std::string> get_all_buses() const;
   
           bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
-          bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote);
-          bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,const std::vector<std::string>& buses);
+          bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
+                                                        const std::vector<std::string>& buses = std::vector<std::string>());
 
           LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
@@ -139,8 +139,7 @@ private:
     SimpleTransport(CanProcessor* processor) : CanProtocol(processor) {}
     virtual ~SimpleTransport() {}
 
-    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote);
-    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses);
+    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name);
   };
 
   Callback*                       _cback;

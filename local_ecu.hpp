@@ -47,8 +47,7 @@ private:
           void                    claim_address(uint8_t address,const std::string& bus_name);
           void                    disable_device(const std::string& bus_name);
 
-          bool                    send_message(CanMessagePtr message,RemoteECUPtr remote);
-          bool                    send_message(CanMessagePtr message,const std::string& bus_name);
+          bool                    send_message(CanMessagePtr message,RemoteECUPtr remote,const std::string& bus_name);
 
 private:
   Mutex                           _mutex;
