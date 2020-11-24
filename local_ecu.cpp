@@ -141,7 +141,7 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote,const std:
   {
     fn = [message, bus_name](uint64_t,CanMessageConfirmation confirm)
           {
-            message->callback(bus_name, confirm != eMessageSent);
+            message->callback(bus_name, confirm == eMessageSent);
           };
   }
 

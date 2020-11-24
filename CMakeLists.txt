@@ -9,13 +9,17 @@ set(SOURCES
     can_name.cpp
     can_processor.cpp
     can_protocol.cpp
-    can_transport_protocol.cpp
     can_utils.cpp
     local_ecu.cpp
     remote_ecu.cpp
+    transport_protocol/can_transport_actions.cpp
+    transport_protocol/can_transport_protocol.cpp
+    transport_protocol/can_transport_session.cpp
     )
 
 add_library(can_library can_library.cpp ${SOURCES})
 target_include_directories(${PROJECT_NAME}
                             PUBLIC
-                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+                            PRIVATE 
+                              transport_protocol)
