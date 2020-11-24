@@ -287,7 +287,7 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
   
   if (stat != eBusActive)
   {
-    _processor->register_bus_callback(bus_name,[this,ecu,address](const std::string& bus_name, CanBusStatus status)
+    _processor->register_bus_callback(bus_name,[this,ecu,address](const std::string& bus_name, CanBusStatus status)->bool
     {
       if (status == eBusInactive)
         return true;
@@ -295,7 +295,8 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
       if (status != eBusActive)
         return false; // Waiting state
 
-      add_local_ecu(ecu, bus_name, address);      
+      add_local_ecu(ecu, bus_name, address);
+      return true;
     });
 
     return true;
@@ -363,6 +364,31 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
 
   return true;
 }
+
+/**
+ * \fn  CanDeviceDatabase::remove_local_ecu
+ *
+ * @param  ecu : LocalECUPtr 
+ */
+bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name)
+{
+  std::lock_guard<Mutex> l(_mutex);
+  for (auto bus_iter : _device_map)
+  {
+    auto iter = bus_iter.second.find_right(ecu_name.data64());
+    if (iter.first)
+    {
+      LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(iter.second.second);
+      if (!local)
+        return false;
+      
+      local->disable_device(bus_iter.first);
+      bus_iter.second.erase_right(ecu_name.data64());
+    }
+  }
+  return true;
+}
+
 
 /**
  * \fn  get_local_ecus

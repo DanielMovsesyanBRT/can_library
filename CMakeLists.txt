@@ -8,6 +8,8 @@ set(SOURCES
     can_message.cpp
     can_name.cpp
     can_processor.cpp
+    can_protocol.cpp
+    can_transport_protocol.cpp
     can_utils.cpp
     local_ecu.cpp
     remote_ecu.cpp

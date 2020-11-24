@@ -7,6 +7,7 @@
  */
     
 #include "can_processor.hpp"  
+#include "can_transport_protocol.hpp"
 
 #include <mutex>
 
@@ -23,6 +24,8 @@ CanProcessor::CanProcessor(Callback* cback)
 , _mutex(this)
 , _device_db(this)
 {
+  _transport_stack.push_back(std::make_shared<SimpleTransport>(this));
+  _transport_stack.push_back(std::make_shared<CanTransportProtocol>(this));
 }
 
 /**
@@ -45,6 +48,13 @@ void CanProcessor::update()
 
   uint64_t time_tick = _cback->get_time_tick();
 
+  // Call all updaters
+  for (auto updater : _updaters)
+  {
+    if (updater)
+      updater();
+  }
+
   // Check buses
   std::lock_guard<RecoursiveMutex> l(_mutex);
   for (auto& bus : _bus_map)
@@ -61,21 +71,17 @@ void CanProcessor::update()
           else
             iter++;
         }
-
-        while (!bus.second._packet_fifo.empty())
-        {
-          send_raw_packet(bus.second._packet_fifo.front(), bus.first);
-          bus.second._packet_fifo.pop_front();
-        }
       }
     }
-  }
 
-  // Call all updaters
-  for (auto updater : _updaters)
-  {
-    if (updater)
-      updater();
+    if (bus.second._status == eBusActive)
+    {
+      while (!bus.second._packet_fifo.empty())
+      {
+        _cback->send_can_packet(bus.first, bus.second._packet_fifo.front());
+        bus.second._packet_fifo.pop_front();
+      }
+    }
   }
 }
 
@@ -274,6 +280,28 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
 }
 
 /**
+ * \fn  CanProcessor::destroy_local_ecu
+ *
+ * @param  local : LocalECUPtr 
+ * @return  bool
+ */
+bool CanProcessor::destroy_local_ecu(LocalECUPtr local)
+{
+  return device_db().remove_local_ecu(local->name());
+}
+
+/**
+ * \fn  CanProcessor::destroy_local_ecu
+ *
+ * @param  name : const CanName& 
+ * @return  bool
+ */
+bool CanProcessor::destroy_local_ecu(const CanName& name)
+{
+  return device_db().remove_local_ecu(name);
+}
+
+/**
  * \fn  CanProcessor::received_can_packet
  *
  * @param  packet : const CanPacket& 
@@ -329,10 +357,11 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
   if (!remote)
     return send_can_message(message,local,get_all_buses());
 
-  if (message->length() <= 8)
-    return local->send_message(message, remote);
-  
-  // todo: other protocols
+  for (auto transport : _transport_stack)
+  {
+    if (transport->send_message(message, local, remote))
+      return true;
+  }
   return false;
 }
 
@@ -341,7 +370,7 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
  *
  * @param  message : CanMessagePtr 
  * @param  local : LocalECUPtr 
- * @param  >& buses : const std::vector<std::string
+ * @param  buses : const std::vector<std::string>& 
  * @return  bool
  */
 bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,const std::vector<std::string>& buses)
@@ -349,16 +378,48 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,cons
   if (!local)
     return false;
 
-  if (message->length() <= 8)
+  for (auto transport : _transport_stack)
   {
-    for (auto bus_name : buses)
-      local->send_message(message, bus_name);
-
-    return true;
+    if (transport->send_message(message, local, buses))
+      return true;
   }
-
-  // todo: other protocols
   return false;
+}
+
+/**
+ * \fn  CanProcessor::SimpleTransport::send_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  local :  LocalECUPtr 
+ * @param  remote :  RemoteECUPtr 
+ * @return  bool
+ */
+bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote)
+{
+  if (message->length() > 8)
+    return false;
+
+  local->send_message(message, remote);
+  return true;
+}
+
+/**
+ * \fn  CanProcessor::SimpleTransport::send_message
+ *
+ * @param  message : CanMessagePtr 
+ * @param  local :  LocalECUPtr 
+ * @param  >& buses :  const std::vector<std::string
+ * @return  bool
+ */
+bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses)
+{
+  if (message->length() > 8)
+    return false;
+
+  for (auto bus_name : buses)
+    local->send_message(message, bus_name);
+
+  return true;
 }
 
 
@@ -419,20 +480,21 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bu
   if (fn)
     _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(), fn));
 
-  if (bus->second._status != eBusActive)
-  {
-    // There is a potential danger that remote device or
-    // local device will change its address on the bus while
-    // bus is in waiting state, however for this moment we consider
-    // the message is already on the bus - outside of address negotiation logic
-    bus->second._packet_fifo.push_back(packet);
-  }
-  else
-  {
-    _cback->send_can_packet(bus_name,packet);
-  }
-  return true;
+  bus->second._packet_fifo.push_back(packet);
 
+  // if (bus->second._status != eBusActive)
+  // {
+  //   // There is a potential danger that remote device or
+  //   // local device will change its address on the bus while
+  //   // bus is in waiting state, however for this moment we consider
+  //   // the message is already on the bus - outside of address negotiation logic
+  // }
+  // else
+  // {
+  //   _cback->send_can_packet(bus_name,packet);
+  // }
+
+  return true;
 }
 
 /**

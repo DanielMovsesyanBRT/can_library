@@ -145,9 +145,27 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote)
 
   for (auto ba : bus_address)
   {
-    if (!processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
-                                                    message->pgn(), get_address(ba.first), ba.second, message->priority()), ba.first))
-      return false;
+    if (!message->cback())
+    {
+      if (!processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
+                                                  message->pgn(), get_address(ba.first), ba.second, message->priority()), ba.first))
+        return false;
+    }
+    else
+    {
+      std::string bus_name = ba.first;
+      if (!processor()->send_raw_packet(CanPacket(message->data(), message->length(), 
+                                                  message->pgn(), get_address(ba.first), 
+                                                  ba.second, message->priority()), ba.first, 
+                [message, bus_name](uint64_t,CanMessageConfirmation confirm)
+                {
+                  message->callback(bus_name, confirm != eMessageSent);
+                }))
+      {
+        message->callback(bus_name, false);
+        return false;
+      }
+    }
   }
 
   return true;
@@ -177,7 +195,20 @@ bool LocalECU::send_message(CanMessagePtr message,const std::string& bus_name)
       return true;
     }
   }
-    
+  
+  if (message->cback())
+  {
+    if (!processor()->send_raw_packet(CanPacket(message->data(), message->length(), message->pgn(),BROADCATS_CAN_ADDRESS, 
+                        get_address(bus_name), message->priority()), bus_name,
+        [message,bus_name](uint64_t,CanMessageConfirmation confirm)
+        { message->callback(bus_name, confirm == eMessageSent); }))
+    {
+      message->callback(bus_name, false);
+      return false;
+    }
+    return true;
+  }
+
   return processor()->send_raw_packet(CanPacket(message->data(), message->length(), message->pgn(),BROADCATS_CAN_ADDRESS, 
                           get_address(bus_name), message->priority()), bus_name);
 }

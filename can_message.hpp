@@ -120,11 +120,15 @@ private:
 class CanMessage  
 {
 public:
-  CanMessage() : _pgn(0), _priority(0) {}
-  explicit CanMessage(const std::vector<uint8_t> & data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY)
+  typedef std::function<void(uint64_t,const std::string&,bool)>   ConfirmationCallback;
+  // CanMessage() : _pgn(0), _priority(0), _unique_id(_unique_counter++) {}
+  explicit CanMessage(const std::vector<uint8_t> & data, uint32_t pgn
+            , uint8_t priority = DEFAULT_CAN_PRIORITY,ConfirmationCallback cback = ConfirmationCallback())
   : _pgn(pgn)
   , _priority(priority)
   , _data(data)
+  , _unique_id(_unique_counter++)
+  , _cback(cback)
   {  }
 
   virtual ~CanMessage() {}
@@ -140,10 +144,23 @@ public:
   const uint8_t*                  data() const { return _data.data(); }
   uint32_t                        length() const { return static_cast<uint32_t>(_data.size()); }
 
+  uint64_t                        unique_id() const { return _unique_id; }
+  
+  ConfirmationCallback            cback() const { return _cback; }
+  void                            callback(const std::string& bus_name, bool succsess)
+  {
+    if (_cback)
+      _cback(_unique_id, bus_name, succsess);
+  }
+
 private:
   uint32_t                        _pgn;
   uint8_t                         _priority;
   std::vector<uint8_t>            _data;
+  ConfirmationCallback            _cback;
+
+  uint64_t                        _unique_id;
+  static std::atomic_uint64_t     _unique_counter;
 };
 
 /**
@@ -157,14 +174,16 @@ class CanMessagePtr : public std::shared_ptr<CanMessage>
 public:
   CanMessagePtr() {}
 
-  explicit CanMessagePtr(const std::vector<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY)
-   : std::shared_ptr<CanMessage>(new CanMessage(data, pgn, priority))
+  explicit CanMessagePtr(const std::vector<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
+   : std::shared_ptr<CanMessage>(new CanMessage(data, pgn, priority, cback))
   { }
 
-  explicit CanMessagePtr(const uint8_t *data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY)
+  explicit CanMessagePtr(const uint8_t *data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
   { 
     std::vector<uint8_t> dt(data, data + length);
-    reset(new CanMessage(dt, pgn, priority));
+    reset(new CanMessage(dt, pgn, priority, cback));
   }
 
 };

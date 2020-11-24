@@ -22,7 +22,7 @@
 #include "local_ecu.hpp"
 #include "remote_ecu.hpp"
 #include "can_device_database.hpp"
-
+#include "can_protocol.hpp"
 
 namespace brt {
 namespace can {
@@ -99,6 +99,9 @@ public:
           LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
                                             const std::vector<std::string>& desired_buses = std::vector<std::string>());
+          
+          bool                    destroy_local_ecu(LocalECUPtr);
+          bool                    destroy_local_ecu(const CanName& name);
 
           void                    on_remote_ecu(RemoteECUPtr remote,const std::string& bus_name)
           { if (_cback) _cback->on_remote_ecu(remote,bus_name); }
@@ -118,11 +121,28 @@ public:
           void                    delete_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->delete_mutex(mtx_id); }
           void                    lock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->lock_mutex(mtx_id); }
           void                    unlock_mutex(uint32_t mtx_id) { if (_cback != nullptr) _cback->unlock_mutex(mtx_id); }
-          uint32_t                get_current_thread_id() const { if (_cback != nullptr) return _cback->get_current_thread_id(); }
+          uint32_t                get_current_thread_id() const { return (_cback != nullptr) ?_cback->get_current_thread_id() : (uint32_t)-1; }
 
 private:
           void                    on_request(const CanPacket&,const std::string&);
 private:
+  
+  /**
+   * \class SimpleTransport
+   *
+   * Inherited from :
+   *             CanProtocol 
+   */
+  class SimpleTransport : public CanProtocol
+  {
+  public:
+    SimpleTransport(CanProcessor* processor) : CanProtocol(processor) {}
+    virtual ~SimpleTransport() {}
+
+    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote);
+    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, const std::vector<std::string>& buses);
+  };
+
   Callback*                       _cback;
   mutable RecoursiveMutex         _mutex;
   CanDeviceDatabase               _device_db;
@@ -163,6 +183,7 @@ private:
   std::list<PacketConfirmation>   _confirm_callbacks;
   std::list<UpdateCallback>       _updaters;
 
+  std::deque<CanProtocolPtr>     _transport_stack;
 };
 
 

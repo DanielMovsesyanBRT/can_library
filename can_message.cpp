@@ -12,6 +12,7 @@ namespace brt {
 namespace can {
 
 std::atomic_uint64_t CanPacket::_unique_counter(0LLU);
+std::atomic_uint64_t CanMessage::_unique_counter(0LLU);
 
 } // can
 } // brt

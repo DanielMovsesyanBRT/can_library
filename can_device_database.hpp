@@ -44,6 +44,8 @@ public:
           std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
 
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
+          bool                    remove_local_ecu(const CanName& ecu_name);
+
           std::vector<LocalECUPtr> get_local_ecus(const std::string& bus_name = "");
 
 private:
