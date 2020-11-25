@@ -10,59 +10,15 @@
 
 #include "../can_protocol.hpp"
 #include "can_transport_session.hpp"
+#include "can_transport_defines.hpp"
 
 #include <unordered_set>
 #include <deque>
 #include <memory>
 
 
-// ISO 11783-3:2018 5.13.3:
-// The required time interval between packets of a multi-packet broadcast message is 10 ms to 200 ms
-#define BAM_TP_MINIMUM_TIMEOUT              (10) // ms
-
-// ISO 11783-3:2018 timeouts
-#define TRANSPORT_TIMEOUT_Tr                (200) // ms
-#define TRANSPORT_TIMEOUT_Th                (500) // ms
-#define TRANSPORT_TIMEOUT_T1                (750) // ms
-#define TRANSPORT_TIMEOUT_T2                (1250) // ms
-#define TRANSPORT_TIMEOUT_T3                (1250) // ms
-#define TRANSPORT_TIMEOUT_T4                (1050) // ms
-
-
 namespace brt {
 namespace can {
-
-/**
- * \enum TPControlByte
- *
- */
-enum TPControlByte
-{
-  RTS = 16,
-  CTS = 17,
-  EOM = 19, // End of message ACK
-  Abort = 255,
-  BAM = 32
-};
-
-/**
- * \enum TPAbortReason
- *
- */
-enum TPAbortReason
-{
-  AbortDuplicateConnection = 1, // Already in one or more connection-managed sessions and cannot support another
-  AbortScarseResources = 2,     // System resources were needed for another task so this connection managed session was terminated
-  AbortTimeout = 3,             // A timeout occurred and this is the connection abort to close the session
-  AbortCTSWhileSending = 4,     // CTS messages received when data transfer is in progress
-  AbortMaxTxRequestLimit = 5,   // Maximum retransmit request limit reached
-  AbortUnexpectedDT = 6,        // Unexpected data transfer packet
-  AbortBadSequenceNumber = 7,   // Bad sequence number (and software is not able to recover)
-  AbortDupSequenceNumber = 8,   // Duplicate sequence number (and software is not able to recover)
-  AbortSizeToBig = 9,           // “Total message size” is greater than 1785 byte
-  AbortUnknown = 250            // If a Connection Abort reason is identified that is not listed in the table use code 250
-};
-
 
 /**
  * \class CanTransportProtocol
@@ -134,14 +90,14 @@ private:
     /**
      * \fn  get_active
      *
-     * @param  local : LocalECUPtr 
-     * @param  remote :  RemoteECUPtr 
-     * @param  & bus_name :  const std::string
+     * @param  source : CanECUPtr 
+     * @param  destination :  CanECUPtr 
+     * @param  bus_name :  const std::string&
      * @return  TransportSessionPtr
      */
-    TransportSessionPtr get_active(LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
+    TransportSessionPtr get_active(CanECUPtr source, CanECUPtr destination, const std::string& bus_name)
     {
-      size_t hash = TransportSession::hash(local, remote, bus_name);
+      size_t hash = TransportSession::hash(source, destination, bus_name);
       auto iter = _session_queue.find(hash);
       if (iter == _session_queue.end())
         return TransportSessionPtr();
@@ -149,7 +105,6 @@ private:
       return iter->second.front();
     }
     
-
     SessionMap                    _session_queue;
   }                               _session_stack[eNumDirections];
 

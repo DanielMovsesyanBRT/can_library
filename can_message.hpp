@@ -141,7 +141,10 @@ public:
 
   bool                            is_pdu1() const { return (pf() < 240); }
   bool                            is_pdu2() const { return (pf() >= 240); }
+  
   const uint8_t*                  data() const { return _data.data(); }
+  uint8_t*                        data() { return _data.data(); }
+
   uint32_t                        length() const { return static_cast<uint32_t>(_data.size()); }
 
   uint64_t                        unique_id() const { return _unique_id; }

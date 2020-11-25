@@ -13,6 +13,9 @@ namespace brt {
 namespace can {
 
 class TransportSession;
+class TxSession;
+class RxSession;
+
 /**
  * \class Action
  *
@@ -26,7 +29,7 @@ public:
   virtual void                    update() = 0;
   virtual void                    pgn_received(const CanPacket& packet) = 0;
           
-          TransportSession*        session() { return _session; }
+          TransportSession*       session() { return _session; }
           std::shared_ptr<Action> getptr() { return shared_from_this(); }
 
 private:
@@ -35,7 +38,6 @@ private:
 
 typedef std::shared_ptr<Action> ActionPtr;
 
-
 /************************************
  * 
  *       Transmitting Actions
@@ -43,15 +45,32 @@ typedef std::shared_ptr<Action> ActionPtr;
  ***********************************/
 
 /**
+ * \class TxAction
+ *
+ * Inherited from :
+ *             Action 
+ */
+class TxAction : public Action
+{
+public:
+  TxAction(TxSession* session);
+  virtual ~TxAction() {}
+
+          TxSession*              session();
+          std::shared_ptr<TxAction> getptr() { return std::dynamic_pointer_cast<TxAction>(Action::getptr()); }
+};
+
+
+/**
  * \class SendBAM
  *
  * Inherited from :
  *             Action 
  */
-class SendBAM : public Action
+class SendBAM : public TxAction
 {
 public:
-  SendBAM(TransportSession* session) : Action(session) {}
+  SendBAM(TxSession* session) : TxAction(session) {}
   virtual ~SendBAM() {}
 
   virtual void                    update();
@@ -64,10 +83,10 @@ public:
  * Inherited from :
  *             Action 
  */
-class SendData : public Action
+class SendData : public TxAction
 {
 public:
-  SendData(TransportSession* session,std::pair<uint8_t,uint8_t> range);
+  SendData(TxSession* session,std::pair<uint8_t,uint8_t> range);
   virtual ~SendData() {}
 
   virtual void                    update();
@@ -85,10 +104,10 @@ private:
  * Inherited from :
  *             Action 
  */
-class SendRTS : public Action
+class SendRTS : public TxAction
 {
 public:
-  SendRTS(TransportSession* session) : Action(session){ }
+  SendRTS(TxSession* session) : TxAction(session){ }
   virtual ~SendRTS() {}
 
   virtual void                    update();
@@ -101,16 +120,17 @@ public:
  * Inherited from :
  *             Action 
  */
-class WaitCTS : public Action
+class WaitCTS : public TxAction
 {
 public:
-  WaitCTS(TransportSession* session);
+  WaitCTS(TxSession* session);
   virtual ~WaitCTS() {}
 
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
 protected:
   uint64_t                        _time_tag;
+  uint64_t                        _timeout_value;
 };
 
 /**
@@ -122,13 +142,60 @@ protected:
 class WaitEOM : public WaitCTS
 {
 public:
-  WaitEOM(TransportSession* session) : WaitCTS(session) {}
+  WaitEOM(TxSession* session) : WaitCTS(session) {}
   virtual ~WaitEOM() {}
 
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
 };
 
+
+/************************************
+ * 
+ *       Receiving Actions
+ * 
+ ***********************************/
+
+
+/**
+ * \class RxAction
+ *
+ * Inherited from :
+ *             Action 
+ */
+class RxAction : public Action
+{
+public:
+  RxAction(RxSession* session);
+  virtual ~RxAction() {}
+
+          RxSession*              session();
+          std::shared_ptr<RxAction> getptr() { return std::dynamic_pointer_cast<RxAction>(Action::getptr()); }
+};
+
+
+/**
+ * \class ReceiveData
+ *
+ * Inherited from :
+ *             RxAction
+ */
+class ReceiveData : public RxAction
+{
+public:
+  ReceiveData(RxSession* session,std::pair<uint8_t,uint8_t> range);
+  virtual ~ReceiveData() {}
+
+  virtual void                    update();
+  virtual void                    pgn_received(const CanPacket& packet);
+
+private:
+  std::pair<uint8_t,uint8_t>      _range;
+  uint32_t                        _current;
+  uint64_t                        _time_tag;
+  uint64_t                        _timeout_value;
+  int                             _attempts;
+};
 
 } // can
 } // brt

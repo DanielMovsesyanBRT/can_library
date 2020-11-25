@@ -59,7 +59,7 @@ bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local
     return false;
 
   std::lock_guard<Mutex> lock(_mutex);
-  _session_stack[eTransmit].add(std::make_shared<TransportSession>(processor(), &_mutex, message, local, remote, bus_name));
+  _session_stack[eTransmit].add(std::make_shared<TxSession>(processor(), &_mutex, message, local, remote, bus_name));
   return true;
 }
 
@@ -89,7 +89,7 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
     return;
 
   LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
-  RemoteECUPtr remote = std::dynamic_pointer_cast<RemoteECU>(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
+  RemoteECUPtr remote = std::dynamic_pointer_cast<RemoteECU>(processor()->device_db().get_ecu_by_address(packet.sa(),bus_name));
 
   if (packet.pgn() == PGN_TP_CM)
   {
@@ -102,6 +102,39 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
         TransportSessionPtr session = _session_stack[eTransmit].get_active(local, remote, bus_name);
         if (session)
           session->pgn_received(packet);
+      }
+      break;
+
+    case Abort:
+      switch (packet.data()[1])
+      {
+      case AbortCTSWhileSending:
+      case AbortTimeout:
+        {
+          TransportSessionPtr session = _session_stack[eTransmit].get_active(local, remote, bus_name);
+          if (session)
+            session->abort(AbortIgnoreMessage);
+        }
+      default:
+        {
+          TransportSessionPtr session = _session_stack[eReceive].get_active(remote, local, bus_name);
+          if (session)
+            session->abort(AbortIgnoreMessage);
+        }
+        break;
+      }
+
+      break;
+
+    case RTS:
+    case BAM:
+      {
+        std::lock_guard<Mutex> lock(_mutex);
+        TransportSessionPtr session = _session_stack[eReceive].get_active(remote, local, bus_name);
+        if (session)
+          // Ignoring this session
+          break;
+        _session_stack[eReceive].add(std::make_shared<RxSession>(processor(), &_mutex, remote, local, bus_name, packet));
       }
       break;
 

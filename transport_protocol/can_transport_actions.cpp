@@ -14,6 +14,26 @@ namespace can {
 
 
 /**
+ * \fn  constructor TxAction::TxAction
+ *
+ * @param  session : TxSession* 
+ */
+TxAction::TxAction(TxSession* session) : Action(session) 
+{
+
+}
+
+/**
+ * \fn  TxAction::session
+ *
+ * @return  TxSession*
+ */
+TxSession* TxAction::session()
+{ 
+  return dynamic_cast<TxSession*>(Action::session()); 
+}
+
+/**
  * \fn  SendBAM::update
  *
  */
@@ -23,33 +43,20 @@ void SendBAM::update()
   uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
 
   auto me = getptr();
-
-  CanMessagePtr msg( 
-    {
-      static_cast<uint8_t>(BAM), 
-      static_cast<uint8_t>(total_size & 0xFF),
-      static_cast<uint8_t>((total_size >> 8) & 0xFF),
-      num_packets,
-      0xFF,
-      static_cast<uint8_t>(session()->message()->pgn() & 0xFF),
-      static_cast<uint8_t>((session()->message()->pgn() >> 8) & 0xFF),
-      static_cast<uint8_t>((session()->message()->pgn() >> 16) & 0xFF),
-    }, PGN_TP_CM, 7,
-    [me, num_packets](uint64_t,const std::string& bus_name,bool success)
+  if (!session()->send_bam([me, num_packets](uint64_t,const std::string& bus_name,bool success)
     {
       if (success)
       {
         me->session()->change_action(me, std::make_shared<SendData>(me->session(),
-                  std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(0), static_cast<uint8_t>(num_packets))));
+                  std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(0), num_packets)));
       }   
       else
         me->session()->change_action(me, ActionPtr());
 
-    });
-
-
-  if (!session()->processor()->send_can_message(msg, session()->local(), RemoteECUPtr(), std::vector<std::string>(1, session()->bus_name())))
+    }))
+  {
     session()->change_action(me, ActionPtr());
+  }
 }
 
 /**
@@ -60,11 +67,10 @@ void SendBAM::update()
  * \fn  constructor SendData::SendData
  *
  * @param  session : TransportSession* 
- * @param  <uint8_t : std::pair
- * @param  range : uint8_t> 
+ * @param  range : std::pair<uint8_t,uint8_t>
  */
-SendData::SendData(TransportSession* session,std::pair<uint8_t,uint8_t> range) 
-  : Action(session), _range(range), _current(range.first) 
+SendData::SendData(TxSession* session,std::pair<uint8_t,uint8_t> range) 
+  : TxAction(session), _range(range), _current(range.first) 
 {
   _time_tag = session->processor()->get_time_tick();
 }
@@ -82,47 +88,40 @@ void SendData::update()
   }
 
   auto me = getptr();
-  uint32_t offset = (_current * 7);
-  uint32_t num_bytes = std::min(session()->message()->length() - offset, 7U);
 
-  std::vector<uint8_t> data(8, 0xFF);
-  
-  data[0] = (_current + 1);
-  memcpy(&data[1], &session()->message()->data()[offset], num_bytes);
-
-  CanMessagePtr msg(data, PGN_TP_DT, 7, 
-    [me](uint64_t,const std::string& bus_name,bool success)
+  if (!session()->send_data(_current, [me](uint64_t,const std::string& bus_name,bool success)
     {
       // Callback for message sent
       if (success)
         me->session()->update();
       else
         me->session()->change_action(me, ActionPtr());
-
-    });
-
-  _time_tag = session()->processor()->get_time_tick();
-
-  if (++_current >= _range.second)
+    }))
   {
-    if (session()->is_broadcast())
+    session()->change_action(me, ActionPtr());
+  }
+  else
+  {
+    _time_tag = session()->processor()->get_time_tick();
+
+    if (++_current >= _range.second)
     {
-      session()->change_action(me, ActionPtr());
-    }
-    else
-    {
-      uint16_t total_size = static_cast<uint16_t>(session()->message()->length());
-      uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
-      
-      if (_current < num_packets)
-        session()->change_action(getptr(), std::make_shared<WaitCTS>(session()));
+      if (session()->is_broadcast())
+      {
+        session()->change_action(me, ActionPtr());
+      }
       else
-        session()->change_action(getptr(), std::make_shared<WaitEOM>(session()));
+      {
+        uint16_t total_size = static_cast<uint16_t>(session()->message()->length());
+        uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
+        
+        if (_current < num_packets)
+          session()->change_action(getptr(), std::make_shared<WaitCTS>(session()));
+        else
+          session()->change_action(getptr(), std::make_shared<WaitEOM>(session()));
+      }
     }
   }
-
-  if (!session()->processor()->send_can_message(msg, session()->local(), session()->remote(), std::vector<std::string>(1, session()->bus_name())))
-    session()->change_action(me, ActionPtr());
 }
 
 /**
@@ -138,7 +137,6 @@ void SendData::pgn_received(const CanPacket& packet)
 
   if (packet.data()[0] == CTS)
     session()->abort(AbortCTSWhileSending);
-
 }
 
 /**
@@ -151,22 +149,8 @@ void SendData::pgn_received(const CanPacket& packet)
  */
 void SendRTS::update()
 {
-  uint16_t total_size = static_cast<uint16_t>(session()->message()->length());
-  uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
-
   auto me = getptr();
-  CanMessagePtr msg( 
-    {
-      static_cast<uint8_t>(RTS), 
-      static_cast<uint8_t>(total_size & 0xFF),
-      static_cast<uint8_t>((total_size >> 8) & 0xFF),
-      num_packets,
-      0xFF,
-      static_cast<uint8_t>(session()->message()->pgn() & 0xFF),
-      static_cast<uint8_t>((session()->message()->pgn() >> 8) & 0xFF),
-      static_cast<uint8_t>((session()->message()->pgn() >> 16) & 0xFF),
-    }, PGN_TP_CM, 7,
-    [me, num_packets](uint64_t,const std::string& bus_name,bool success)
+  if (!session()->send_rts([me](uint64_t,const std::string& bus_name,bool success)
     {
       if (success)
         me->session()->change_action(me, std::make_shared<WaitCTS>(me->session()));
@@ -174,10 +158,10 @@ void SendRTS::update()
         me->session()->change_action(me, ActionPtr());
       
       me->session()->update();
-    });
-
-  if (!session()->processor()->send_can_message(msg, session()->local(), session()->remote()))
+    }))
+  {
     session()->change_action(getptr(), ActionPtr());
+  }
 }
 
 /**
@@ -189,9 +173,10 @@ void SendRTS::update()
  *
  * @param  session : TransportSession* 
  */
-WaitCTS::WaitCTS(TransportSession* session) 
-: Action(session)
+WaitCTS::WaitCTS(TxSession* session) 
+: TxAction(session)
 , _time_tag(session->processor()->get_time_tick()) 
+, _timeout_value(TRANSPORT_TIMEOUT_T3)
 {  }
 /**
  * \fn  WaitCTS::update
@@ -199,9 +184,8 @@ WaitCTS::WaitCTS(TransportSession* session)
  */
 void WaitCTS::update()
 {
-  if ((session()->processor()->get_time_tick() - _time_tag) > TRANSPORT_TIMEOUT_T3)
+  if ((session()->processor()->get_time_tick() - _time_tag) > _timeout_value)
     session()->abort(AbortTimeout);
-
 }
 
 /**
@@ -220,12 +204,19 @@ void WaitCTS::pgn_received(const CanPacket& packet)
       session()->change_action(getptr(), ActionPtr());
       return;
     }
-
     uint8_t num_packets = packet.data()[1];
-    uint8_t next_packet = packet.data()[2];
-
-    session()->change_action(getptr(), std::make_shared<SendData>(session(),
-              std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(num_packets), static_cast<uint8_t>(num_packets + next_packet))));
+    if (num_packets == 0)
+    {
+      // Receiver is stalling transmission
+      _time_tag = session()->processor()->get_time_tick();
+      _timeout_value = TRANSPORT_TIMEOUT_T4;
+    }
+    else
+    {
+      uint8_t next_packet = packet.data()[2];
+      session()->change_action(getptr(), std::make_shared<SendData>(session(),
+                std::pair<uint8_t,uint8_t>(static_cast<uint8_t>(num_packets), static_cast<uint8_t>(num_packets + next_packet))));
+    }
   }
   else if (packet.data()[0] == Abort)
   {
@@ -234,7 +225,7 @@ void WaitCTS::pgn_received(const CanPacket& packet)
 }
 
 /**
- *************************** TransportSession
+ *************************** WaitEOM
  */
 
 
@@ -261,6 +252,112 @@ void WaitEOM::pgn_received(const CanPacket& packet)
     WaitCTS::pgn_received(packet);
   else if (packet.data()[0] == EOM)
     session()->change_action(getptr(), ActionPtr());
+}
+
+
+/**
+ *************************** RxAction
+ */
+
+/**
+ * \fn  constructor RxAction::RxAction
+ *
+ * @param  session : RxSession* 
+ */
+RxAction::RxAction(RxSession* session) 
+: Action(session) 
+{
+
+}
+
+/**
+ * \fn  RxAction::session
+ *
+ * @return  RxSession*
+ */
+RxSession* RxAction::session()
+{ 
+  return dynamic_cast<RxSession*>(Action::session()); 
+}
+
+/**
+ *************************** ReceiveData
+ */
+
+
+
+/**
+ * \fn  constructor ReceiveData::ReceiveData
+ *
+ * @param  session : RxSession* 
+ * @param  range : std::pair<uint8_t,uint8_t> 
+ */
+ReceiveData::ReceiveData(RxSession* session,std::pair<uint8_t,uint8_t> range)
+: RxAction(session)
+, _range(range)
+, _current(range.first)
+, _time_tag(session->processor()->get_time_tick())
+, _timeout_value(TRANSPORT_TIMEOUT_T2)
+, _attempts(0)
+{  
+
+}
+
+/**
+ * \fn  ReceiveData::update
+ *
+ */
+void ReceiveData::update()
+{
+  if ((session()->processor()->get_time_tick() - _time_tag) > _timeout_value)
+  {
+    // Timeout occured we are Aborting reception
+    if (session()->is_broadcast())
+      session()->change_action(getptr(), ActionPtr());
+    else if (++_timeout_value > MAX_CTS_ATTEMPTS)
+      session()->abort(AbortMaxTxRequestLimit);
+    else
+    {
+      session()->send_cts();
+      _time_tag = session()->processor()->get_time_tick();
+      _timeout_value = TRANSPORT_TIMEOUT_T2;
+    }
+  }
+}
+
+/**
+ * \fn  ReceiveData::pgn_received
+ *
+ * @param  packet : const CanPacket& 
+ */
+void ReceiveData::pgn_received(const CanPacket& packet)
+{
+  uint8_t sequence_number = packet.data()[0];
+  uint8_t data_bytes[7];
+  memcpy(data_bytes, &packet.data()[1], 7);
+
+  _timeout_value = TRANSPORT_TIMEOUT_T1;
+
+  if (session()->sequence_received(sequence_number, data_bytes))
+  {
+    if (session()->is_complete())
+    {
+      if (!session()->is_broadcast())
+        session()->send_eom();
+
+      session()->message_complete();
+    }
+    else 
+    {
+      if (!session()->is_broadcast() && session()->is_range_complete(_range))
+      {
+        session()->send_cts();
+        _timeout_value = TRANSPORT_TIMEOUT_T2;
+      }
+    }
+  }
+
+  _time_tag = session()->processor()->get_time_tick();
 }
 
 

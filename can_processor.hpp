@@ -71,7 +71,7 @@ public:
   public:
     virtual ~Callback() {}
     virtual uint64_t                get_time_tick() = 0;
-    virtual void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote) = 0;
+    virtual void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote,const std::string& bus_name) = 0;
     virtual void                    send_can_packet(const std::string& bus, const CanPacket& packet) = 0;
     virtual void                    on_remote_ecu(RemoteECUPtr remote,const std::string& bus_name) = 0;
 
@@ -95,6 +95,8 @@ public:
           bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
           bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
                                                         const std::vector<std::string>& buses = std::vector<std::string>());
+
+          void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote,const std::string& bus_name);
 
           LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
@@ -183,6 +185,22 @@ private:
   std::list<UpdateCallback>       _updaters;
 
   std::deque<CanProtocolPtr>     _transport_stack;
+
+  /**
+   * \struct ReceivedMessages
+   *
+   */
+  struct ReceivedMessages
+  {
+    ReceivedMessages(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
+    : _message(message), _local(local), _remote(remote), _bus_name(bus_name)
+    { }
+    CanMessagePtr                   _message;
+    LocalECUPtr                     _local;
+    RemoteECUPtr                    _remote;
+    std::string                     _bus_name;
+  };
+  std::deque<ReceivedMessages>    _received_messages;
 };
 
 

@@ -47,42 +47,55 @@ void CanProcessor::update()
     return;
 
   uint64_t time_tick = _cback->get_time_tick();
+  std::deque<ReceivedMessages>  received;
 
-  // Call all updaters
-  for (auto updater : _updaters)
   {
-    if (updater)
-      updater();
-  }
-
-  // Check buses
-  std::lock_guard<RecoursiveMutex> l(_mutex);
-  for (auto& bus : _bus_map)
-  {
-    if (bus.second._status == eBusActivating)
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    // Call all updaters
+    for (auto updater : _updaters)
     {
-      if ((time_tick - bus.second._time_tag) >= CAN_ADDRESS_CLAIMED_WAITING_TIME)
+      if (updater)
+        updater();
+    }
+
+    // Check buses
+    for (auto& bus : _bus_map)
+    {
+      if (bus.second._status == eBusActivating)
       {
-        bus.second._status = eBusActive;
-        for (auto iter = bus.second._bus_callbacks.begin(); iter != bus.second._bus_callbacks.end(); )
+        if ((time_tick - bus.second._time_tag) >= CAN_ADDRESS_CLAIMED_WAITING_TIME)
         {
-          if ((*iter) && (*iter)(bus.first, bus.second._status))
-            iter = bus.second._bus_callbacks.erase(iter);
-          else
-            iter++;
+          bus.second._status = eBusActive;
+          for (auto iter = bus.second._bus_callbacks.begin(); iter != bus.second._bus_callbacks.end(); )
+          {
+            if ((*iter) && (*iter)(bus.first, bus.second._status))
+              iter = bus.second._bus_callbacks.erase(iter);
+            else
+              iter++;
+          }
+        }
+      }
+
+      if (bus.second._status == eBusActive)
+      {
+        while (!bus.second._packet_fifo.empty())
+        {
+          _cback->send_can_packet(bus.first, bus.second._packet_fifo.front());
+          bus.second._packet_fifo.pop_front();
         }
       }
     }
-
-    if (bus.second._status == eBusActive)
-    {
-      while (!bus.second._packet_fifo.empty())
-      {
-        _cback->send_can_packet(bus.first, bus.second._packet_fifo.front());
-        bus.second._packet_fifo.pop_front();
-      }
-    }
+    received = _received_messages;
+    _received_messages.clear();
   }
+
+  while (!received.empty())
+  {
+    ReceivedMessages& msg = received.front();
+    _cback->message_received(msg._message, msg._local, msg._remote, msg._bus_name);
+    received.pop_front();
+  }
+
 }
 
 /**
@@ -337,7 +350,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
   if (packet.sa() < NULL_CAN_ADDRESS)
     remote = std::dynamic_pointer_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus_name));
 
-  _cback->message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote);
+  message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
   return true;
 }
 
@@ -375,6 +388,21 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
   }
 
   return result;
+}
+
+/**
+ * \fn  CanProcessor::message_received
+ *
+ * @param  message : CanMessagePtr 
+ * @param  local : LocalECUPtr 
+ * @param  remote :  RemoteECUPtr 
+ * @param  bus_name : const std::string&
+ */
+void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
+                                   RemoteECUPtr remote,const std::string& bus_name)
+{
+  std::lock_guard<RecoursiveMutex> l(_mutex);
+  _received_messages.push_back(ReceivedMessages(message,local,remote,bus_name));
 }
 
 
