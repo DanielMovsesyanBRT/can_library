@@ -149,21 +149,6 @@ private:
   CanDeviceDatabase               _device_db;
 
   /**
-   * \struct PacketConfirmation
-   *
-   */
-  struct PacketConfirmation
-  {
-    PacketConfirmation(uint64_t packet_id,ConfirmationCallback cback)
-    : _packet_id(packet_id)
-    , _callback(cback)
-    { }
-
-    uint64_t                      _packet_id;
-    ConfirmationCallback          _callback;
-  };
-
-  /**
    * \struct Bus
    *
    */
@@ -174,17 +159,35 @@ private:
     uint64_t                        _time_tag;
     uint64_t                        _initial_packet_id;
 
-    std::deque<CanPacket>           _packet_fifo;
+    fifo<CanPacket>                 _packet_fifo;
     std::list<BusStatusCallback>    _bus_callbacks;
   };
 
   std::unordered_map<std::string,Bus> _bus_map;
   std::unordered_map<uint32_t,PGNCallback> _pgn_receivers;
   
-  std::list<PacketConfirmation>   _confirm_callbacks;
   std::list<UpdateCallback>       _updaters;
+  std::deque<CanProtocolPtr>      _transport_stack;
 
-  std::deque<CanProtocolPtr>     _transport_stack;
+
+  // Real time structures
+
+  /**
+   * \struct PacketConfirmation
+   *
+   */
+  struct PacketConfirmation
+  {
+    PacketConfirmation() = default;
+    PacketConfirmation(uint64_t packet_id,ConfirmationCallback cback)
+    : _packet_id(packet_id)
+    , _callback(cback)
+    { }
+
+    uint64_t                      _packet_id;
+    ConfirmationCallback          _callback;
+  };
+  fixed_list<PacketConfirmation>  _confirm_callbacks;
 
   /**
    * \struct ReceivedMessages
@@ -192,6 +195,7 @@ private:
    */
   struct ReceivedMessages
   {
+    ReceivedMessages() = default;
     ReceivedMessages(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
     : _message(message), _local(local), _remote(remote), _bus_name(bus_name)
     { }
@@ -200,7 +204,7 @@ private:
     RemoteECUPtr                    _remote;
     std::string                     _bus_name;
   };
-  std::deque<ReceivedMessages>    _received_messages;
+  fifo<ReceivedMessages>          _received_messages;
 };
 
 

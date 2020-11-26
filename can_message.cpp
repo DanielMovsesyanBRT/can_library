@@ -14,6 +14,10 @@ namespace can {
 std::atomic_uint64_t CanPacket::_unique_counter(0LLU);
 std::atomic_uint64_t CanMessage::_unique_counter(0LLU);
 
+CanMessage::big_packet_allocator CanMessage::_big_packet_allocator;
+CanMessage::small_packet_allocator CanMessage::_small_packet_allocator;
+
+
 } // can
 } // brt
 

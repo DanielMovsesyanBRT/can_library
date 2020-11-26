@@ -17,9 +17,11 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <array>
 
 namespace brt {
 namespace can {
+
 
 class CanProcessor;
 /**
@@ -28,8 +30,8 @@ class CanProcessor;
  */
 class CanDeviceDatabase  
 {
-  typedef BiKeyMap<uint8_t,uint64_t,CanECUPtr>  BusMap;
-  typedef std::unordered_map<std::string,BusMap> DeviceMap;
+  typedef std::array<CanECUPtr, 256>              BusMap;
+  typedef std::unordered_map<std::string,BusMap>  DeviceMap;
 
 public:
   CanDeviceDatabase(CanProcessor*);
@@ -38,15 +40,13 @@ public:
           void                    create_bus(const std::string& bus_name);  
 
           CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus_name) const;
-          CanECUPtr               get_ecu_by_name(const CanName& ecu_name) const;
-
+          CanECUPtr               get_ecu_by_name(const CanName& ecu_name,const std::string& bus_name) const;
           uint8_t                 get_ecu_address(const CanName& ecu_name,const std::string& bus_name) const;
-          std::vector<std::string> get_ecu_bus(const CanName& ecu_name) const;
-
+      
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
-          bool                    remove_local_ecu(const CanName& ecu_name);
+          bool                    remove_local_ecu(const CanName& ecu_name,const std::string& bus_name);
 
-          std::vector<LocalECUPtr> get_local_ecus(const std::string& bus_name = "");
+          void                    get_local_ecus(fixed_list<LocalECUPtr>& list, const std::string& bus_name = "");
 
 private:
           void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
@@ -63,7 +63,8 @@ private:
   mutable Mutex                   _mutex;
   
   DeviceMap                       _device_map;
-  std::unordered_map<uint64_t,CanECUPtr> _remote_devices;
+  //  std::unordered_map<uint64_t,CanECUPtr> _remote_devices;
+  fixed_list<CanECUPtr>            _remote_devices;
 };
 
 } // can

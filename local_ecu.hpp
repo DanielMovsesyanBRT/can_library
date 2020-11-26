@@ -43,11 +43,24 @@ friend CanDeviceDatabase;
   LocalECU(CanProcessor*,const CanName& name = CanName());
   virtual ~LocalECU();
 
+          void* operator new( size_t count )
+          { 
+            return _allocator.allocate(); 
+          }
+
+          void operator delete  ( void* ptr )
+          { 
+            _allocator.free(ptr); 
+          }
+
 private:
           void                    claim_address(uint8_t address,const std::string& bus_name);
           void                    disable_device(const std::string& bus_name);
 
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote,const std::string& bus_name);
+
+private:
+  static  allocator<LocalECU>     _allocator;
 
 private:
   Mutex                           _mutex;

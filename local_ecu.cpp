@@ -14,6 +14,7 @@
 namespace brt {
 namespace can {
 
+allocator<LocalECU> LocalECU::_allocator;
 /**
  * \fn  constructor LocalECU::LocalECU
  *

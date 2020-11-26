@@ -17,6 +17,7 @@
 #include <algorithm>
 
 #include "can_constants.hpp"
+#include "can_utils.hpp"
 
 namespace brt {
 namespace can {
@@ -113,57 +114,86 @@ private:
 };
 
 
+class CanMessagePtr;
 /**
  * \class CanMessage
  *
  */
 class CanMessage  
 {
+friend CanMessagePtr;
 public:
   typedef std::function<void(uint64_t,const std::string&,bool)>   ConfirmationCallback;
-  // CanMessage() : _pgn(0), _priority(0), _unique_id(_unique_counter++) {}
+
+private:
   explicit CanMessage(const std::vector<uint8_t> & data, uint32_t pgn
             , uint8_t priority = DEFAULT_CAN_PRIORITY,ConfirmationCallback cback = ConfirmationCallback())
   : _pgn(pgn)
   , _priority(priority)
-  , _data(data)
   , _unique_id(_unique_counter++)
   , _cback(cback)
-  {  }
+  , _size(data.size())
+  {  
+    memcpy(_data, data.data(), _size);
+  }
 
+public:
   virtual ~CanMessage() {}
 
-  uint32_t                        pgn() const { return _pgn; }
-  uint8_t                         priority() const { return _priority; }
-  uint8_t                         dp() const { return static_cast<uint8_t>((_pgn >> 16) & 1); } 
-  uint8_t                         edp() const { return static_cast<uint8_t>((_pgn >> 17) & 1); } 
-  uint8_t                         pf() const { return static_cast<uint8_t>((_pgn >> 8) & 0xFF); }
+          uint32_t                pgn() const { return _pgn; }
+          uint8_t                 priority() const { return _priority; }
+          uint8_t                 dp() const { return static_cast<uint8_t>((_pgn >> 16) & 1); } 
+          uint8_t                 edp() const { return static_cast<uint8_t>((_pgn >> 17) & 1); } 
+          uint8_t                 pf() const { return static_cast<uint8_t>((_pgn >> 8) & 0xFF); }
 
-  bool                            is_pdu1() const { return (pf() < 240); }
-  bool                            is_pdu2() const { return (pf() >= 240); }
+          bool                    is_pdu1() const { return (pf() < 240); }
+          bool                    is_pdu2() const { return (pf() >= 240); }
   
-  const uint8_t*                  data() const { return _data.data(); }
-  uint8_t*                        data() { return _data.data(); }
+          const uint8_t*          data() const { return _data; }
+          uint8_t*                data() { return _data; }
 
-  uint32_t                        length() const { return static_cast<uint32_t>(_data.size()); }
+          uint32_t                length() const { return static_cast<uint32_t>(_size); }
 
-  uint64_t                        unique_id() const { return _unique_id; }
+          uint64_t                unique_id() const { return _unique_id; }
   
-  ConfirmationCallback            cback() const { return _cback; }
-  void                            callback(const std::string& bus_name, bool succsess)
-  {
-    if (_cback)
-      _cback(_unique_id, bus_name, succsess);
-  }
+          ConfirmationCallback    cback() const { return _cback; }
+          void                    callback(const std::string& bus_name, bool succsess)
+          {
+            if (_cback)
+              _cback(_unique_id, bus_name, succsess);
+          }
+
+          void* operator new( size_t count, size_t data_size )
+          {
+            if (data_size <= 8)
+              return _small_packet_allocator.allocate();
+            
+            return _big_packet_allocator.allocate();
+          }
+
+          void operator delete(void *ptr, std::size_t)
+          {
+
+          }
 
 private:
   uint32_t                        _pgn;
   uint8_t                         _priority;
-  std::vector<uint8_t>            _data;
   ConfirmationCallback            _cback;
 
   uint64_t                        _unique_id;
   static std::atomic_uint64_t     _unique_counter;
+
+  uint32_t                        _size;
+  uint8_t                         _data[0];
+
+
+private: 
+  typedef allocator_extra<CanMessage,255*7> big_packet_allocator;
+  typedef allocator_extra<CanMessage,8>     small_packet_allocator;
+  
+  static  big_packet_allocator    _big_packet_allocator;
+  static  small_packet_allocator  _small_packet_allocator;
 };
 
 /**
@@ -179,16 +209,16 @@ public:
 
   explicit CanMessagePtr(const std::vector<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
-   : std::shared_ptr<CanMessage>(new CanMessage(data, pgn, priority, cback))
-  { }
+   : std::shared_ptr<CanMessage>(new (data.size()) CanMessage(data, pgn, priority, cback))
+  { 
+  }
 
   explicit CanMessagePtr(const uint8_t *data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
   { 
     std::vector<uint8_t> dt(data, data + length);
-    reset(new CanMessage(dt, pgn, priority, cback));
+    reset(new (length) CanMessage(dt, pgn, priority, cback));
   }
-
 };
 
 } // can

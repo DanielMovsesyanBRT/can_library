@@ -9,124 +9,378 @@
 
 #include <unordered_map>
 #include <atomic>
+#include <queue>
+#include <array>
+#include <stdexcept>
+#include <algorithm>
 
 namespace brt {
 namespace can {
 
 /**
- * \class BiKeyMap
+ * \class fifo
  *
  */
-template<typename Key1, typename Key2, typename Value>
-class BiKeyMap
+template<typename _Type,size_t _Size = 1024>
+class fifo
 {
 public:
-  typedef std::pair<Key2, Value> value_type1;
-  typedef std::pair<Key1, Value> value_type2;
+  typedef _Type& reference;
+  typedef const _Type& const_reference;
 
-  typedef std::unordered_map<Key1, value_type1>   Map1;
-  typedef std::unordered_map<Key2, value_type2>   Map2;
+  fifo() : _buffer(), _read(0), _write(0) {}
+  ~fifo() {}
 
-  BiKeyMap() {}
-
-  /**
-   * \fn  insert
-   *
-   * @param  key1 : Key1 
-   * @param  key2 : Key2 
-   * @param  value : Value 
-   * @return  bool
-   */
-  bool insert(Key1 key1,Key2 key2,Value value)
+  bool empty() const
   {
-    _map1.erase(key1);
-    _map2.erase(key2);
+    return (_read == _write);
+  }
 
-    auto result1 = _map1.insert(typename BiKeyMap::Map1::value_type(key1,typename BiKeyMap::value_type1(key2,value)));
-    if (!result1.second)
+  reference front()
+  {
+    if (empty())
+      throw std::out_of_range("fifo is empty");
+    
+    return _buffer[_read];
+  }
+
+  const_reference front() const
+  {
+    if (empty())
+      throw std::out_of_range("fifo is empty");
+    
+    return _buffer[_read];
+  }
+
+  size_t size() const
+  {
+    if (_write < _read)
+      return _Size - _read + _write;
+    
+    return _write - _read;
+  }
+
+  bool push(reference v)
+  {
+    if (size() >= (_Size - 1))
       return false;
-
-    auto result2 = _map2.insert(typename BiKeyMap::Map2::value_type(key2,typename BiKeyMap::value_type2(key1,value)));
-    if (!result2.second)
-    {
-      _map1.erase(result1.first);
-      return false;
-    }
-
+    
+    _buffer[_write++] = v;
+    if (_write == _Size)
+      _write = 0;
     return true;
   }
 
-  /**
-   * \fn  erase_left
-   *
-   * @param  key : Key1 
-   */
-  void  erase_left(Key1 key) 
+  bool push(const_reference v)
   {
-    auto left = _map1.find(key);
-    if (left == _map1.end())
-      return;
-
-    _map2.erase(left->second.first);
-    _map1.erase(left);
+    if (size() >= (_Size - 1))
+      return false;
+    
+    _buffer[_write++] = v;
+    if (_write == _Size)
+      _write = 0;
+    return true;
   }
 
-  /**
-   * \fn  erase_right
-   *
-   * @param  key : Key2 
-   */
-  void  erase_right(Key2 key) 
+  bool pop()
   {
-    auto right = _map2.find(key);
-    if (right == _map2.end())
-      return;
-
-    _map1.erase(right->second.first);
-    _map2.erase(right);
+    if (empty())
+      return false;
+    
+    _buffer[_read++] = _Type();
+    if (_read == _Size)
+      _read = 0;
+    return false;
   }
 
-  /**
-   * \fn  find_left
-   *
-   * @param  key : Key1 
-   * @return  std::pair<bool, value_type1
-   */
-  std::pair<bool, value_type1> find_left(Key1 key) const
+  void clear()
   {
-    auto left = _map1.find(key);
-    if (left == _map1.end())
-      return std::pair<bool, value_type1>(false,value_type1());
-
-    return std::pair<bool, value_type1>(true,left->second);
+    while (_read != _write)
+    {
+      _buffer[_read++] = _Type();
+      if (_read == _Size)
+        _read = 0;
+    }
   }
 
-  /**
-   * \fn  find_right
-   *
-   * @param  key : Key2 
-   * @return  std::pair<bool, value_type2
-   */
-  std::pair<bool, value_type2> find_right(Key2 key) const
-  {
-    auto right = _map2.find(key);
-    if (right == _map2.end())
-      return std::pair<bool, value_type2>(false,value_type2());
-
-    return std::pair<bool, value_type2>(true,right->second);
-  }
-
-  typename Map1::iterator begin() { return _map1.begin(); }
-  typename Map1::iterator end() { return _map1.end(); }
-
-  typename Map1::const_iterator begin() const { return _map1.begin(); }
-  typename Map1::const_iterator end() const { return _map1.end(); }
+  fifo<_Type,_Size>& operator=(const fifo<_Type,_Size>& rval) = default;
 
 private:
-
-  Map1                            _map1;
-  Map2                            _map2;
+  std::array<_Type,_Size>         _buffer;
+  size_t                          _read;
+  size_t                          _write;
 };
+
+/**
+ * \class fixed_list
+ *
+ */
+template<typename _Type,size_t _Size = 1024>
+class fixed_list
+{
+private:
+  struct filler
+  {
+    filler() : _v(), _empty(true) {}
+    _Type         _v;
+    bool          _empty;
+  };
+  std::array<filler, _Size>       _buffer;
+  size_t                          _num_elements;
+
+public:
+  
+  /**
+   * \class iterator
+   *
+   */
+  class iterator
+  {
+  friend fixed_list<_Type,_Size>;
+    typedef fixed_list<_Type,_Size>::filler _Raw;
+    
+    iterator(_Raw* ptr,_Raw* end) : _ptr(ptr), _end(end)
+    {
+      while (_ptr < _end && _ptr->_empty)
+        _ptr++;
+    }
+
+  public:
+    typedef iterator self_type;
+    typedef _Type value_type;
+    typedef _Type& reference;
+    typedef _Type* pointer;
+    typedef std::forward_iterator_tag iterator_category;
+    typedef ptrdiff_t difference_type;
+
+    self_type operator++() 
+    {
+      while (_ptr < _end && _ptr->_empty)
+        _ptr++;
+      return *this;
+    }
+
+    reference operator*() 
+    { 
+      return _ptr->_v;
+    }
+
+    pointer operator->() 
+    { 
+      return &_ptr->_v; 
+    }
+
+    bool operator==(const self_type& rhs) { return _ptr == rhs._ptr; }
+    bool operator!=(const self_type& rhs) { return _ptr != rhs._ptr; }
+
+  private:
+    filler*                         _ptr;
+    filler*                         _end;
+  };
+
+  /**
+   * \class const_iterator
+   *
+   */
+  class const_iterator
+  {
+  friend fixed_list<_Type,_Size>;
+    typedef fixed_list<_Type,_Size>::filler _Raw;
+    
+    const_iterator(_Raw* ptr,_Raw* end) : _ptr(ptr), _end(end)
+    {
+      while (_ptr < _end && _ptr->_empty)
+        _ptr++;
+    }
+
+  public:
+    typedef const_iterator self_type;
+    typedef _Type value_type;
+    typedef _Type& reference;
+    typedef _Type* pointer;
+    typedef std::forward_iterator_tag iterator_category;
+    typedef ptrdiff_t difference_type;
+
+
+    self_type operator++() 
+    {
+      while (_ptr < _end && _ptr->_empty)
+        _ptr++;
+      return *this;
+    }
+
+    self_type operator++(int) 
+    {
+      while (_ptr < _end && _ptr->_empty)
+        _ptr++;
+      return *this;
+    }
+
+    reference operator*() 
+    { 
+      return _ptr->_v;
+    }
+
+    pointer operator->() 
+    { 
+      return &_ptr->_v; 
+    }
+
+    bool operator==(const self_type& rhs) { return _ptr == rhs._ptr; }
+    bool operator!=(const self_type& rhs) { return _ptr != rhs._ptr; }
+
+  private:
+    filler*                         _ptr;
+    filler*                         _end;
+  };
+
+  typedef _Type& reference;
+  typedef const _Type& const_reference;
+
+  fixed_list() : _num_elements(0) {}
+  ~fixed_list() {}
+
+  size_t size() const { return _num_elements; }
+  
+  iterator begin() { return iterator(_buffer.data(),_buffer.data() + _buffer.size()); }
+  iterator end() { return iterator(_buffer.data() + _buffer.size(),_buffer.data() + _buffer.size()); }
+
+  const_iterator begin() const { return const_iterator(_buffer.data(),_buffer.data() + _buffer.size()); }
+  const_iterator end() const { return const_iterator(_buffer.data() + _buffer.size(),_buffer.data() + _buffer.size()); }
+
+  bool push(const _Type& v)
+  {
+    for (auto& fl : _buffer)
+    {
+      if (fl._empty)
+      {
+        fl._v = v;
+        fl._empty = false;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  iterator erase(iterator i)
+  {
+    if (i == end())
+      return end();
+
+    i._ptr->_v = _Type();
+    i._ptr->_empty = true;
+
+    return ++i;
+  }
+
+  template<typename _Predicate>
+  iterator find_if(_Predicate p)
+  {
+    return std::find_if(begin(), end(), p);
+  }
+
+  template<typename _Predicate>
+  const_iterator find_if(_Predicate p) const
+  {
+    return std::find_if(begin(), end(), p);
+  }
+};
+
+/**
+ * \class allocator
+ *
+ *  Fixe size allocator for real time operations
+ */
+template<typename _Type,size_t _Buffersize = 1024>
+class allocator
+{
+  struct filler
+  {
+    filler() : _empty(true) {}
+    uint8_t  _v[sizeof(_Type)];
+    bool    _empty;
+  };
+  std::array<filler,_Buffersize>  _buffer;
+
+public:
+  allocator() {}
+  ~allocator() {}
+
+  void*    allocate()
+  {
+    for (size_t index = 0; index < _buffer.size(); index++)
+    {
+      if (_buffer[index]._empty)
+      {
+        _buffer[index]._empty = false;
+        return &_buffer[index]._v[0];
+      }
+    }
+    return nullptr;
+  }
+
+  void     free(void* ptr)
+  {
+    filler* fl = reinterpret_cast<filler*>(ptr);
+    if ((fl >= _buffer.data()) && (fl < (_buffer.data() + _buffer.size())))
+    {
+      if (!fl->_empty)
+        reinterpret_cast<_Type*>(&fl->_v[0])->~_Type();
+
+      fl->_empty = true;
+    }
+  }
+};
+
+
+/**
+ * \class allocator_extra
+ *
+ */
+template<typename _Type,size_t _Extrasize = 0,size_t _Buffersize = 1024>
+class allocator_extra
+{
+  struct filler
+  {
+    filler() : _empty(true) {}
+    uint8_t  _v[sizeof(_Type) + _Extrasize];
+    bool    _empty;
+  };
+  std::array<filler,_Buffersize>  _buffer;
+
+public:
+  allocator_extra() {}
+  ~allocator_extra() {}
+
+  void*    allocate()
+  {
+    for (size_t index = 0; index < _buffer.size(); index++)
+    {
+      if (_buffer[index]._empty)
+      {
+        _buffer[index]._empty = false;
+        return &_buffer[index]._v[0];
+      }
+    }
+    return nullptr;
+  }
+
+  void     free(void* ptr)
+  {
+    filler* fl = reinterpret_cast<filler*>(ptr);
+    if ((fl >= _buffer.data()) && (fl < (_buffer.data() + _buffer.size())))
+    {
+      if (!fl->_empty)
+        reinterpret_cast<_Type*>(&fl->_v[0])->~_Type();
+
+      fl->_empty = true;
+    }
+  }
+};
+
+
+// template<typename T>
+// class shared_pointer
 
 
 class CanProcessor;

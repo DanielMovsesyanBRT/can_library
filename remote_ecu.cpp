@@ -12,6 +12,8 @@
 namespace brt {
 namespace can {
 
+allocator<RemoteECU> RemoteECU::_allocator;
+
 /**
  * \fn  constructor RemoteECU::RemoteECU
  *

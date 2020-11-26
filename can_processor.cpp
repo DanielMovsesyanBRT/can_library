@@ -47,7 +47,7 @@ void CanProcessor::update()
     return;
 
   uint64_t time_tick = _cback->get_time_tick();
-  std::deque<ReceivedMessages>  received;
+  fifo<ReceivedMessages>  received;
 
   {
     std::lock_guard<RecoursiveMutex> l(_mutex);
@@ -81,7 +81,7 @@ void CanProcessor::update()
         while (!bus.second._packet_fifo.empty())
         {
           _cback->send_can_packet(bus.first, bus.second._packet_fifo.front());
-          bus.second._packet_fifo.pop_front();
+          bus.second._packet_fifo.pop();
         }
       }
     }
@@ -93,7 +93,7 @@ void CanProcessor::update()
   {
     ReceivedMessages& msg = received.front();
     _cback->message_received(msg._message, msg._local, msg._remote, msg._bus_name);
-    received.pop_front();
+    received.pop();
   }
 
 }
@@ -131,7 +131,7 @@ bool CanProcessor::register_can_bus(const std::string& bus_name)
       return false;
  
     // Register callback for this message to process BUS activation 
-    _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(),
+    _confirm_callbacks.push(PacketConfirmation(packet.unique_id(),
            [this](uint64_t packet_id,CanMessageConfirmation status) 
       {
         std::lock_guard<RecoursiveMutex> l(_mutex);
@@ -180,7 +180,8 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
 {
   if (packet.is_broadcast())
   {
-    std::vector<LocalECUPtr> ecus = _device_db.get_local_ecus(bus_name);
+    fixed_list<LocalECUPtr> ecus;
+    _device_db.get_local_ecus(ecus, bus_name);
     for (auto ecu : ecus)
     {
       if (ecu)
@@ -238,12 +239,13 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
                                             uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/,
                                             const std::vector<std::string>& desired_buses /*= std::vector<std::string>()*/)
 {
-  CanECUPtr ecu = _device_db.get_ecu_by_name(name);
+  CanECUPtr ecu = _device_db.get_ecu_by_name(name,"");
   if (ecu)
     return std::dynamic_pointer_cast<LocalECU>(ecu);
 
   bool result = false;
-  LocalECUPtr local = std::make_shared<LocalECU>(this, name);
+  //LocalECUPtr local = std::make_shared<LocalECU>(this, name);
+  LocalECUPtr local(new LocalECU(this, name));
   if (desired_buses.empty()) // all buses
   {
     std::vector<std::string> buses;
@@ -300,7 +302,7 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
  */
 bool CanProcessor::destroy_local_ecu(LocalECUPtr local)
 {
-  return device_db().remove_local_ecu(local->name());
+  return destroy_local_ecu(local->name());
 }
 
 /**
@@ -311,7 +313,15 @@ bool CanProcessor::destroy_local_ecu(LocalECUPtr local)
  */
 bool CanProcessor::destroy_local_ecu(const CanName& name)
 {
-  return device_db().remove_local_ecu(name);
+  size_t num = 0;
+  
+  std::lock_guard<RecoursiveMutex> l(_mutex);
+  for (auto bus : _bus_map)
+  {
+    if (device_db().remove_local_ecu(name,bus.first))
+      num++;
+  }
+  return (num != 0);
 }
 
 /**
@@ -402,7 +412,7 @@ void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
                                    RemoteECUPtr remote,const std::string& bus_name)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
-  _received_messages.push_back(ReceivedMessages(message,local,remote,bus_name));
+  _received_messages.push(ReceivedMessages(message,local,remote,bus_name));
 }
 
 
@@ -433,7 +443,7 @@ bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECU
 void CanProcessor::can_packet_confirm(uint64_t packet_id,CanMessageConfirmation status)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
-  auto iter = std::find_if(_confirm_callbacks.begin(), _confirm_callbacks.end(),[packet_id](const PacketConfirmation& cfrm)->bool
+  auto iter = _confirm_callbacks.find_if([packet_id](const PacketConfirmation& cfrm)->bool
   {
     return cfrm._packet_id == packet_id;
   });
@@ -479,9 +489,9 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bu
     return false;
 
   if (fn)
-    _confirm_callbacks.push_back(PacketConfirmation(packet.unique_id(), fn));
+    _confirm_callbacks.push(PacketConfirmation(packet.unique_id(), fn));
 
-  bus->second._packet_fifo.push_back(packet);
+  bus->second._packet_fifo.push(packet);
 
   // if (bus->second._status != eBusActive)
   // {
