@@ -10,7 +10,7 @@
 #include "../local_ecu.hpp"
 #include "../remote_ecu.hpp"
 
-#include "can_transport_actions.hpp"
+// #include "can_transport_actions.hpp"
 #include "can_transport_defines.hpp"
 
 namespace brt {
@@ -22,9 +22,10 @@ class CanProcessor;
  * \class TransportSession
  *
  */
-class TransportSession
+class TransportSession : public shared_class<TransportSession>
 {
 public:
+  typedef std::pair<uint8_t,uint8_t>  range;
   /**
    * \fn  constructor TransportSession
    *
@@ -32,7 +33,7 @@ public:
    * @param  mutex :  Mutex* 
    * @param  local :  LocalECUPtr 
    * @param  remote : RemoteECUPtr 
-   * @param  & bus_name : const std::string
+   * @param  bus_name : const std::string&
    */
   TransportSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr local,CanECUPtr remote,const std::string& bus_name)
   : _processor(processor), _mutex(mutex), _message(message), _source(local), _destination(remote), _bus_name(bus_name)
@@ -55,9 +56,10 @@ public:
           std::string             bus_name() const { return _bus_name; }
           bool                    is_broadcast() const { return !_destination; }
           
-          bool                    update();
-          bool                    pgn_received(const CanPacket& packet);
-          void                    change_action(ActionPtr old_action,ActionPtr new_action);
+  virtual void                    update() = 0;
+  virtual void                    pgn_received(const CanPacket& packet) = 0;
+  virtual bool                    is_complete() const = 0;
+
           void                    abort(uint8_t reason);
           CanMessagePtr           message() const { return _message; }
 
@@ -77,9 +79,9 @@ public:
     return hash;
   }
 
-  static  size_t                  hash(const TransportSession& session)
+  static  size_t                  hash(shared_pointer<TransportSession> session)
   {
-    return hash(session._source, session._destination, session._bus_name);
+    return hash(session->_source, session->_destination, session->_bus_name);
   }
 
 protected:
@@ -90,71 +92,9 @@ protected:
   CanECUPtr                       _source;
   CanECUPtr                       _destination;
   std::string                     _bus_name;
-
-  ActionPtr                       _action;
 };
 
-typedef std::shared_ptr<TransportSession> TransportSessionPtr;
-
-
-/**
- * \class TxSession
- *
- * Inherited from :
- *             TransportSession 
- */
-class TxSession : public TransportSession
-{
-public:
-  TxSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr source,CanECUPtr destination,const std::string& bus_name)
-  : TransportSession(processor, mutex, message,  source, destination, bus_name)
-   {
-    if (is_broadcast())
-      _action = std::make_shared<SendBAM>(this);
-    else
-      _action = std::make_shared<SendRTS>(this);
-  }
-
-  virtual ~TxSession()  {}
-
-  virtual LocalECUPtr             local() { return std::dynamic_pointer_cast<LocalECU>(source_ecu()); }
-  virtual RemoteECUPtr            remote() { return std::dynamic_pointer_cast<RemoteECU>(destination_ecu()); }
-
-          bool                    send_bam(CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
-          bool                    send_data(uint8_t sequence, CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
-          bool                    send_rts( CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
-};
-
-
-/**
- * \class RxSession
- *
- * Inherited from :
- *             TransportSession 
- */
-class RxSession : public TransportSession
-{
-public:
-  RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
-                              const std::string& bus_name, const CanPacket& packet);
-  virtual ~RxSession() {}
-          
-  virtual LocalECUPtr             local() { return std::dynamic_pointer_cast<LocalECU>(destination_ecu()); }
-  virtual RemoteECUPtr            remote() { return std::dynamic_pointer_cast<RemoteECU>(source_ecu()); }
-  
-          bool                    sequence_received(uint8_t sequence, const uint8_t[7]);
-          bool                    is_complete() const;
-          bool                    is_range_complete(const std::pair<uint8_t,uint8_t>& range) const;
-          
-          bool                    send_cts();
-          bool                    send_eom();
-
-          void                    message_complete();
-private:
-  std::array<bool,MAX_TP_PACKETS> _received_map;
-  uint8_t                         _max_packets;
-};
-
+typedef shared_pointer<TransportSession> TransportSessionPtr;
 
 
 } // can

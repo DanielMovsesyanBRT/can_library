@@ -90,11 +90,13 @@ public:
 
           bool                    register_can_bus(const std::string& bus);
           CanBusStatus            get_bus_status(const std::string& bus) const;
-          std::vector<std::string> get_all_buses() const;
+          size_t                  get_all_buses(fixed_list<std::string,10>& buses) const;
   
           bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
+
           bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
-                                                        const std::vector<std::string>& buses = std::vector<std::string>());
+                                                        const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+
 
           void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote,const std::string& bus_name);
 

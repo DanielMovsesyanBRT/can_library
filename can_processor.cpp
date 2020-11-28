@@ -190,7 +190,7 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
   }
   else
   {
-    LocalECUPtr ecu = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    LocalECUPtr ecu = dynamic_shared_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
     if (ecu)
       ecu->claim_address(ecu->get_address(bus_name), bus_name);
   }
@@ -217,14 +217,14 @@ CanBusStatus CanProcessor::get_bus_status(const std::string& bus) const
  *
  * @return  std::vector<std::string
  */
-std::vector<std::string> CanProcessor::get_all_buses() const
+size_t CanProcessor::get_all_buses(fixed_list<std::string,10>& buses) const
 {
-  std::vector<std::string> result;
+  buses.clear();
   std::lock_guard<RecoursiveMutex> l(_mutex);
   for (auto bus : _bus_map)
-    result.push_back(bus.first);
+    buses.push(bus.first);
 
-  return result;
+  return buses.size();
 }
 
 /**
@@ -241,10 +241,9 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
 {
   CanECUPtr ecu = _device_db.get_ecu_by_name(name,"");
   if (ecu)
-    return std::dynamic_pointer_cast<LocalECU>(ecu);
+    return dynamic_shared_cast<LocalECU>(ecu);
 
   bool result = false;
-  //LocalECUPtr local = std::make_shared<LocalECU>(this, name);
   LocalECUPtr local(new LocalECU(this, name));
   if (desired_buses.empty()) // all buses
   {
@@ -340,7 +339,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
   if (!packet.is_broadcast())
   {
     // First we need to check whether this packet is sent to any of our local devices
-    local = std::dynamic_pointer_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    local = dynamic_shared_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
     if (!local)
       return false; // Not our message
   }
@@ -358,7 +357,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
 
   RemoteECUPtr  remote;
   if (packet.sa() < NULL_CAN_ADDRESS)
-    remote = std::dynamic_pointer_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus_name));
+    remote = dynamic_shared_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus_name));
 
   message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
   return true;
@@ -370,19 +369,19 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
  * @param  message : CanMessagePtr 
  * @param  local : LocalECUPtr 
  * @param  remote  : RemoteECUPtr 
- * @param  buses : const std::vector<std::string>&
+ * @param  buses : const std::initializer_list<std::string> buses&
  * @return  bool
  */
 bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
-                            const std::vector<std::string>& buses /*= std::vector<std::string>()*/)
+                            const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string> buses()*/)
 {
   if (!local)
     return false;
 
-  std::vector<std::string> bss(buses);
+  fixed_list<std::string,10> bss(buses);
 
   if (bss.empty())
-    bss = get_all_buses();
+    get_all_buses(bss);
 
   bool result = false;
   for (auto bus_name : bss)

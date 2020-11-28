@@ -39,9 +39,9 @@ private:
           void                    on_pgn_callback(const CanPacket&,const std::string&);
 
 private:
-  
-  typedef std::deque<TransportSessionPtr>         SessionQueue;
-  typedef std::unordered_map<size_t,SessionQueue> SessionMap;
+  typedef fifo<TransportSessionPtr,64>    SessionQueue;
+  typedef std::pair<size_t,SessionQueue>  HashPair;
+  typedef fixed_list<HashPair,32>         SessionMap;
   
   enum StackDirection
   {
@@ -64,8 +64,17 @@ private:
      */
     void add(TransportSessionPtr session)
     {
-      size_t hash = TransportSession::hash(*session);
-      _session_queue[hash].push_back(session);
+      size_t hash = TransportSession::hash(session);
+      auto iter = _session_queue.find_if([hash](const HashPair& pair)->bool
+      {
+        return pair.first == hash;
+      });
+
+      if (iter == _session_queue.end())
+        iter = _session_queue.push(HashPair(hash,SessionQueue()));
+
+      if (iter != _session_queue.end())
+        iter->second.push(session);
     }
 
     /**
@@ -77,8 +86,9 @@ private:
     {
       for (auto iter = _session_queue.begin(); iter != _session_queue.end(); )
       {
-        if (iter->second.front()->update())
-          iter->second.pop_front();
+        iter->second.front()->update();
+        if (iter->second.front()->is_complete())
+          iter->second.pop();
 
         if (iter->second.empty())
           iter = _session_queue.erase(iter);
@@ -98,7 +108,11 @@ private:
     TransportSessionPtr get_active(CanECUPtr source, CanECUPtr destination, const std::string& bus_name)
     {
       size_t hash = TransportSession::hash(source, destination, bus_name);
-      auto iter = _session_queue.find(hash);
+      auto iter = _session_queue.find_if([hash](const HashPair& pair)->bool
+      {
+        return pair.first == hash;
+      });
+
       if (iter == _session_queue.end())
         return TransportSessionPtr();
 
@@ -107,7 +121,6 @@ private:
     
     SessionMap                    _session_queue;
   }                               _session_stack[eNumDirections];
-
 
   RecoursiveMutex                 _mutex;
 };

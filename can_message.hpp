@@ -76,10 +76,10 @@ public:
    * @param  sa :  uint8_t 
    * @param   = DEFAULT_CAN_PRIORITY :  uint8_t priority
    */
-  explicit CanPacket(const std::vector<uint8_t>& data, uint32_t pgn, uint8_t da, uint8_t sa, uint8_t priority = DEFAULT_CAN_PRIORITY)
+  explicit CanPacket(const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t da, uint8_t sa, uint8_t priority = DEFAULT_CAN_PRIORITY)
   : _dlc(std::min(static_cast<uint8_t>(data.size()),static_cast<uint8_t>(MAX_CAN_PACKET_SIZE)))
   {
-    memcpy(_data, data.data(), _dlc);
+    memcpy(_data, data.begin(), _dlc);
     _unique_id = _unique_counter++;
 
     _id = ((priority & 7) << 26) | ((pgn & 0x3FFFF) << 8) | sa;
@@ -119,26 +119,26 @@ class CanMessagePtr;
  * \class CanMessage
  *
  */
-class CanMessage  
+class CanMessage : public shared_class<CanMessage>
 {
 friend CanMessagePtr;
 public:
   typedef std::function<void(uint64_t,const std::string&,bool)>   ConfirmationCallback;
 
 private:
-  explicit CanMessage(const std::vector<uint8_t> & data, uint32_t pgn
+  explicit CanMessage(const uint8_t* data, uint32_t length, uint32_t pgn
             , uint8_t priority = DEFAULT_CAN_PRIORITY,ConfirmationCallback cback = ConfirmationCallback())
   : _pgn(pgn)
   , _priority(priority)
   , _unique_id(_unique_counter++)
   , _cback(cback)
-  , _size(data.size())
+  , _size(length)
   {  
-    memcpy(_data, data.data(), _size);
+    memcpy(_data, data, _size);
   }
 
 public:
-  virtual ~CanMessage() {}
+  ~CanMessage() {}
 
           uint32_t                pgn() const { return _pgn; }
           uint8_t                 priority() const { return _priority; }
@@ -163,18 +163,7 @@ public:
               _cback(_unique_id, bus_name, succsess);
           }
 
-          void* operator new( size_t count, size_t data_size )
-          {
-            if (data_size <= 8)
-              return _small_packet_allocator.allocate();
-            
-            return _big_packet_allocator.allocate();
-          }
-
-          void operator delete(void *ptr, std::size_t)
-          {
-
-          }
+          void operator delete(void*);
 
 private:
   uint32_t                        _pgn;
@@ -186,14 +175,6 @@ private:
 
   uint32_t                        _size;
   uint8_t                         _data[0];
-
-
-private: 
-  typedef allocator_extra<CanMessage,255*7> big_packet_allocator;
-  typedef allocator_extra<CanMessage,8>     small_packet_allocator;
-  
-  static  big_packet_allocator    _big_packet_allocator;
-  static  small_packet_allocator  _small_packet_allocator;
 };
 
 /**
@@ -202,23 +183,50 @@ private:
  * Inherited from :
  *             std :: shared_ptr<CanMessage>
  */
-class CanMessagePtr : public std::shared_ptr<CanMessage>
+class CanMessagePtr : public shared_pointer<CanMessage>
 {
+friend class CanMessage;
 public:
   CanMessagePtr() {}
 
-  explicit CanMessagePtr(const std::vector<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+  explicit CanMessagePtr(const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
-   : std::shared_ptr<CanMessage>(new (data.size()) CanMessage(data, pgn, priority, cback))
   { 
+    CanMessage* msg = nullptr;
+    if (data.size() <= 8)
+      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
+    else if (data.size() <= (255*7))
+      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
+
+    if (msg != nullptr)
+    {
+      ::new (msg) CanMessage(data.begin(), data.size(), pgn, priority, cback);
+      reset(msg);
+    }
   }
 
-  explicit CanMessagePtr(const uint8_t *data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+  explicit CanMessagePtr(const uint8_t* data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
   { 
-    std::vector<uint8_t> dt(data, data + length);
-    reset(new (length) CanMessage(dt, pgn, priority, cback));
+    CanMessage* msg = nullptr;
+    if (length <= 8)
+      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
+    else if (length <= (255*7))
+      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
+
+    if (msg != nullptr)
+    {
+      ::new (msg) CanMessage(data, length, pgn, priority, cback);
+      reset(msg);
+    }
   }
+
+private: 
+  typedef allocator<CanMessage,255*7> big_packet_allocator;
+  typedef allocator<CanMessage,8>     small_packet_allocator;
+  
+  static  big_packet_allocator    _big_packet_allocator;
+  static  small_packet_allocator  _small_packet_allocator;
 };
 
 } // can

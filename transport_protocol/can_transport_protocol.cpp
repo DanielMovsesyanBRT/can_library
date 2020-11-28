@@ -9,6 +9,9 @@
 #include "can_transport_protocol.hpp"  
 #include "can_processor.hpp"
 
+#include "can_transport_txsession.hpp"
+#include "can_transport_rxsession.hpp"
+
 #include <algorithm>
 #include <mutex>
 
@@ -59,10 +62,9 @@ bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local
     return false;
 
   std::lock_guard<Mutex> lock(_mutex);
-  _session_stack[eTransmit].add(std::make_shared<TxSession>(processor(), &_mutex, message, local, remote, bus_name));
+  _session_stack[eTransmit].add(TransportSessionPtr(new TxSession(processor(), &_mutex, message, local, remote, bus_name)));
   return true;
 }
-
 
 /**
  * \fn  CanTransportProtocol::on_update
@@ -88,8 +90,8 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
   if (packet.dlc() < 8)
     return;
 
-  LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
-  RemoteECUPtr remote = std::dynamic_pointer_cast<RemoteECU>(processor()->device_db().get_ecu_by_address(packet.sa(),bus_name));
+  LocalECUPtr local = dynamic_shared_cast<LocalECU>(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
+  RemoteECUPtr remote = dynamic_shared_cast<RemoteECU>(processor()->device_db().get_ecu_by_address(packet.sa(),bus_name));
 
   if (packet.pgn() == PGN_TP_CM)
   {
@@ -134,13 +136,19 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
         if (session)
           // Ignoring this session
           break;
-        _session_stack[eReceive].add(std::make_shared<RxSession>(processor(), &_mutex, remote, local, bus_name, packet));
+        _session_stack[eReceive].add(TransportSessionPtr(new RxSession(processor(), &_mutex, remote, local, bus_name, packet)));
       }
       break;
 
     default:
       break;
     }
+  }
+  else if (packet.pgn() == PGN_TP_DT)
+  {
+    TransportSessionPtr session = _session_stack[eReceive].get_active(remote, local, bus_name);
+    if (session)
+      session->pgn_received(packet);
   }
 }
 

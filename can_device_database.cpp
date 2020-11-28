@@ -240,7 +240,7 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
     else if (is_local_ecu(by_addr))
     {
       // Address Collision - We need to activate ISO 11783-5 address negotiation protocol
-      local = std::dynamic_pointer_cast<LocalECU>(by_addr);
+      local = dynamic_shared_cast<LocalECU>(by_addr);
       // Note: we don't process name == name situation, since it will be 
       // processed by the code above  
       if (local->name().data64() < name.data64())
@@ -394,7 +394,7 @@ bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const std::stri
   BusMap& bus_map = bus_iter->second;
   for (size_t index = 0; index < bus_map.size(); index++)
   {
-    LocalECUPtr local = std::dynamic_pointer_cast<LocalECU>(bus_map[index]);
+    LocalECUPtr local = dynamic_shared_cast<LocalECU>(bus_map[index]);
     if (!local)
       continue;
     
@@ -425,7 +425,7 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, const std:
       for (auto device : bus_map.second)
       {
         if (is_local_ecu(device))
-          list.push(std::dynamic_pointer_cast<LocalECU>(device));
+          list.push(dynamic_shared_cast<LocalECU>(device));
       }
     }
   }
@@ -437,7 +437,7 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, const std:
       for (auto device : bus_map->second)
       {
         if (is_local_ecu(device))
-          list.push(std::dynamic_pointer_cast<LocalECU>(device));
+          list.push(dynamic_shared_cast<LocalECU>(device));
       }
     }
   }

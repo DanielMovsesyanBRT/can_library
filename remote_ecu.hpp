@@ -35,7 +35,8 @@ private:
 
 };
 
-typedef std::shared_ptr<RemoteECU> RemoteECUPtr;
+//typedef std::shared_ptr<RemoteECU> RemoteECUPtr;
+typedef shared_pointer<RemoteECU> RemoteECUPtr;
 
 } // can
 } // brt

@@ -97,8 +97,8 @@ private:
   ContainerMap                    _container_map;
 };
 
-
-typedef std::shared_ptr<LocalECU>   LocalECUPtr;
+//typedef std::shared_ptr<LocalECU>   LocalECUPtr;
+typedef shared_pointer<LocalECU>   LocalECUPtr;
 
 
 } // can

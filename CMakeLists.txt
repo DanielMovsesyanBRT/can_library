@@ -12,9 +12,10 @@ set(SOURCES
     can_utils.cpp
     local_ecu.cpp
     remote_ecu.cpp
-    transport_protocol/can_transport_actions.cpp
     transport_protocol/can_transport_protocol.cpp
+    transport_protocol/can_transport_rxsession.cpp
     transport_protocol/can_transport_session.cpp
+    transport_protocol/can_transport_txsession.cpp
     )
 
 add_library(can_library can_library.cpp ${SOURCES})
