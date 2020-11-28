@@ -33,15 +33,19 @@ RxSession::RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,Can
 {
   uint32_t pgn  = packet.data()[5] | (packet.data()[6] << 8) | (packet.data()[7] << 16);
   uint32_t size = packet.data()[1] | (packet.data()[2] << 8);
+  _message = CanMessagePtr(size, pgn);
 
   _max_packets = packet.data()[4];
   if (_max_packets == 0xFF)
     _max_packets = static_cast<uint8_t>((size - 1) / 7 + 1);
-
+  
   _received_map.fill(false);
 
   if (size > MAX_TP_DATA_SIZE)
     abort(AbortSizeToBig);
+
+  if (!is_broadcast())
+    send_cts();
 }
 
 
@@ -56,11 +60,8 @@ void RxSession::update()
     // Timeout occured we are Aborting reception
     if (is_broadcast())
       _complete = true;
-    else if (++_timeout_value > MAX_CTS_ATTEMPTS)
-    {
+    else if (++_attempts > MAX_CTS_ATTEMPTS)
       abort(AbortMaxTxRequestLimit);
-      _complete = true;
-    }
     else
     {
       send_cts();
@@ -129,7 +130,7 @@ bool RxSession::sequence_received(uint8_t sequence, const uint8_t bytes[7])
 
   size_t num_bytes = std::min(_message->length() - offset, 7u);
   memcpy(_message->data() + offset, bytes, num_bytes);
-  _received_map[sequence] = true;
+  _received_map[sequence - 1] = true;
   return true;
 }
 
@@ -160,7 +161,7 @@ bool RxSession::send_cts()
   uint8_t starting_sequence = 255;
   uint8_t num_sequences = static_cast<uint8_t>((_message->length() - 1) / 7 + 1);
 
-  for (size_t index = 0; ((index < num_sequences) && (starting_sequence != 255)); index++)
+  for (size_t index = 0; ((index < num_sequences) && (starting_sequence == 255)); index++)
   {
     if (!_received_map[index])
       starting_sequence = index;
@@ -170,6 +171,11 @@ bool RxSession::send_cts()
     return false;
 
   uint8_t max_packets = std::min(static_cast<uint8_t>(num_sequences - starting_sequence),_max_packets);
+  
+  _range.first = starting_sequence;
+  _range.second = starting_sequence + max_packets;
+  if (_range.second > num_sequences)
+    _range.second = num_sequences;
 
   CanMessagePtr msg( 
   {

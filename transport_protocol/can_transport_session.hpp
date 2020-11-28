@@ -59,6 +59,7 @@ public:
   virtual void                    update() = 0;
   virtual void                    pgn_received(const CanPacket& packet) = 0;
   virtual bool                    is_complete() const = 0;
+  virtual void                    on_abort() = 0;
 
           void                    abort(uint8_t reason);
           CanMessagePtr           message() const { return _message; }

@@ -113,12 +113,14 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
       case AbortCTSWhileSending:
       case AbortTimeout:
         {
+          std::lock_guard<Mutex> lock(_mutex);
           TransportSessionPtr session = _session_stack[eTransmit].get_active(local, remote, bus_name);
           if (session)
             session->abort(AbortIgnoreMessage);
         }
       default:
         {
+          std::lock_guard<Mutex> lock(_mutex);
           TransportSessionPtr session = _session_stack[eReceive].get_active(remote, local, bus_name);
           if (session)
             session->abort(AbortIgnoreMessage);
@@ -146,6 +148,7 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
   }
   else if (packet.pgn() == PGN_TP_DT)
   {
+    std::lock_guard<Mutex> lock(_mutex);
     TransportSessionPtr session = _session_stack[eReceive].get_active(remote, local, bus_name);
     if (session)
       session->pgn_received(packet);

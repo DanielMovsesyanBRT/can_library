@@ -134,7 +134,8 @@ private:
   , _cback(cback)
   , _size(length)
   {  
-    memcpy(_data, data, _size);
+    if (data != nullptr)
+      memcpy(_data, data, _size);
   }
 
 public:
@@ -220,6 +221,24 @@ public:
       reset(msg);
     }
   }
+
+  explicit CanMessagePtr(uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
+  { 
+    CanMessage* msg = nullptr;
+    if (length <= 8)
+      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
+    else if (length <= (255*7))
+      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
+
+    if (msg != nullptr)
+    {
+      ::new (msg) CanMessage(nullptr, length, pgn, priority, cback);
+      reset(msg);
+    }
+  }
+
+
 
 private: 
   typedef allocator<CanMessage,255*7> big_packet_allocator;

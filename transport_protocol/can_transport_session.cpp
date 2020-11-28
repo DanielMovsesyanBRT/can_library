@@ -34,6 +34,7 @@ void TransportSession::abort(uint8_t reason)
 
     _processor->send_can_message(msg, local(), remote(), { _bus_name });
   }
+  on_abort();
 }
 
 

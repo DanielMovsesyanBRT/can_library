@@ -47,7 +47,6 @@ void CanProcessor::update()
     return;
 
   uint64_t time_tick = _cback->get_time_tick();
-  fifo<ReceivedMessages>  received;
 
   {
     std::lock_guard<RecoursiveMutex> l(_mutex);
@@ -85,17 +84,7 @@ void CanProcessor::update()
         }
       }
     }
-    received = _received_messages;
-    _received_messages.clear();
   }
-
-  while (!received.empty())
-  {
-    ReceivedMessages& msg = received.front();
-    _cback->message_received(msg._message, msg._local, msg._remote, msg._bus_name);
-    received.pop();
-  }
-
 }
 
 /**
@@ -410,8 +399,7 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
 void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
                                    RemoteECUPtr remote,const std::string& bus_name)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
-  _received_messages.push(ReceivedMessages(message,local,remote,bus_name));
+  _cback->message_received(message, local, remote, bus_name);
 }
 
 
@@ -421,6 +409,7 @@ void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
  * @param  message : CanMessagePtr 
  * @param  local :  LocalECUPtr 
  * @param  remote :  RemoteECUPtr 
+ * @param  bus_name : const std::string& 
  * @return  bool
  */
 bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, 
@@ -490,19 +479,18 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bu
   if (fn)
     _confirm_callbacks.push(PacketConfirmation(packet.unique_id(), fn));
 
-  bus->second._packet_fifo.push(packet);
+  // bus->second._packet_fifo.push(packet);
 
-  // if (bus->second._status != eBusActive)
-  // {
-  //   // There is a potential danger that remote device or
-  //   // local device will change its address on the bus while
-  //   // bus is in waiting state, however for this moment we consider
-  //   // the message is already on the bus - outside of address negotiation logic
-  // }
-  // else
-  // {
-  //   _cback->send_can_packet(bus_name,packet);
-  // }
+  if (bus->second._status != eBusActive)
+  {
+    // There is a potential danger that remote device or
+    // local device will change its address on the bus while
+    // bus is in waiting state, however for this moment we consider
+    // the message is already on the bus - outside of address negotiation logic
+    bus->second._packet_fifo.push(packet);
+  }
+  else
+    _cback->send_can_packet(bus_name,packet);
 
   return true;
 }

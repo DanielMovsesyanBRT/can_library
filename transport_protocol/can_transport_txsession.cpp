@@ -105,8 +105,11 @@ void TxSession::update()
       uint16_t total_size = static_cast<uint16_t>(message()->length());
       uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
 
+      _time_tag = processor()->get_time_tick();
+      _state = WaitDriverConfirmation;
+
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_bam([me, num_packets](uint64_t,const std::string& bus_name,bool success)
+      if (!send_bam([me, num_packets, this](uint64_t,const std::string& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -115,22 +118,18 @@ void TxSession::update()
 
               if (success)
               {
-                me->_range.first = static_cast<uint8_t>(0);
-                me->_range.second = num_packets;
-                me->_time_tag = me->processor()->get_time_tick();
-                me->_state = SendData; 
+                _range.first = static_cast<uint8_t>(0);
+                _range.second = num_packets;
+                _time_tag = me->processor()->get_time_tick();
+                _state = SendData; 
+                update();
               }   
               else
-                me->_state = None;
+                _state = None;
             }))
       /// Lambda end
       {
         _state = None;
-      }
-      else
-      {
-        _time_tag = processor()->get_time_tick();
-        _state = WaitDriverConfirmation;
       }
     }
     break;
@@ -143,17 +142,43 @@ void TxSession::update()
           break;
       }
 
+      _time_tag = processor()->get_time_tick();
+      _state = WaitDriverConfirmation;
+
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_data(_current, [me](uint64_t,const std::string& bus_name,bool success)
+      if (!send_data(_current, [me, this](uint64_t,const std::string& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
-              if (me->_state != SendData) 
+              if (me->_state != WaitDriverConfirmation) 
                 return;
 
               // Callback for message sent
               if (success)
-                me->update();
+              {
+                _state = SendData;
+                _time_tag = processor()->get_time_tick();
+
+                if (++_current >= _range.second)
+                {
+                  if (is_broadcast())
+                    _state = None;
+                  else
+                  {
+                    uint16_t total_size = static_cast<uint16_t>(message()->length());
+                    uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
+                    
+                    _time_tag = processor()->get_time_tick();
+                    _timeout_value = TRANSPORT_TIMEOUT_T3;
+
+                    if (_current < num_packets)
+                      _state = WaitCTS;
+                    else
+                      _state = WaitEOM;
+                  }
+                }
+                
+              }
               else
                 me->_state = None;
             }))
@@ -163,34 +188,17 @@ void TxSession::update()
       }
       else
       {
-        _time_tag = processor()->get_time_tick();
-
-        if (++_current >= _range.second)
-        {
-          if (is_broadcast())
-            _state = None;
-          else
-          {
-            uint16_t total_size = static_cast<uint16_t>(message()->length());
-            uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
-            
-            _time_tag = processor()->get_time_tick();
-            _timeout_value = TRANSPORT_TIMEOUT_T3;
-
-            if (_current < num_packets)
-              _state = WaitCTS;
-            else
-              _state = WaitEOM;
-          }
-        }
       }
     }
     break;
 
   case SendRTS:
     {
+      _time_tag = processor()->get_time_tick();
+      _state = WaitDriverConfirmation;
+
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_rts([me](uint64_t,const std::string& bus_name,bool success)
+      if (!send_rts([me, this](uint64_t,const std::string& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -199,40 +207,30 @@ void TxSession::update()
 
               if (success)
               {
-                me->_time_tag = me->processor()->get_time_tick();
-                me->_timeout_value = TRANSPORT_TIMEOUT_T3;
-                me->_state = WaitCTS;
+                _time_tag = me->processor()->get_time_tick();
+                _timeout_value = TRANSPORT_TIMEOUT_T3;
+                _state = WaitCTS;
+                update();
               }
               else
                 me->_state = None;
-              
-              me->update();
             }))
       /// Lambda end
       {
         _state = None;
       }
-      else
-      {
-        _time_tag = processor()->get_time_tick();
-        _state = WaitDriverConfirmation;
-      }
     }
     break;
 
+  case WaitEOM:
   case WaitCTS:
     if ((processor()->get_time_tick() - _time_tag) > _timeout_value)
       abort(AbortTimeout);
     break;
 
-  case WaitEOM:
-    if ((processor()->get_time_tick() - _time_tag) > _timeout_value)
-      _state = None;
-    break;
-
   case WaitDriverConfirmation:
     if ((processor()->get_time_tick() - _time_tag) >= 1000) // 1 second
-      _state = None; // Abort
+      abort(AbortIgnoreMessage);
     break;
 
   default:
@@ -257,18 +255,42 @@ void TxSession::pgn_received(const CanPacket& packet)
           break;
       }
 
+      _time_tag = processor()->get_time_tick();
+      _state = WaitDriverConfirmation;
+
       auto me = dynamic_shared_cast<TxSession>(getptr());
 
-      if (!send_data(_current, [me](uint64_t,const std::string& bus_name,bool success)
+      if (!send_data(_current, [me, this](uint64_t,const std::string& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
-              if (me->_state != SendData) 
+              if (me->_state != WaitDriverConfirmation) 
                 return;
 
               // Callback for message sent
               if (success)
-                me->update();
+              {
+                _state = SendData;
+                _time_tag = processor()->get_time_tick();
+                
+                if (++_current >= _range.second)
+                {
+                  if (is_broadcast())
+                    _state = None;
+                  else
+                  {
+                    uint16_t total_size = static_cast<uint16_t>(message()->length());
+                    uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
+                    
+                    _timeout_value = TRANSPORT_TIMEOUT_T3;
+                    if (_current < num_packets)
+                      _state = WaitCTS;
+                    else
+                      _state = WaitEOM;
+                  }
+                }
+                update();
+              }
               else
                 me->_state = None;
             }))
@@ -278,23 +300,6 @@ void TxSession::pgn_received(const CanPacket& packet)
       }
       else
       {
-        _time_tag = processor()->get_time_tick();
-        if (++_current >= _range.second)
-        {
-          if (is_broadcast())
-            _state = None;
-          else
-          {
-            uint16_t total_size = static_cast<uint16_t>(message()->length());
-            uint8_t  num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
-            
-            _timeout_value = TRANSPORT_TIMEOUT_T3;
-            if (_current < num_packets)
-              _state = WaitCTS;
-            else
-              _state = WaitEOM;
-          }
-        }
       }
     }
     break;
@@ -306,7 +311,6 @@ void TxSession::pgn_received(const CanPacket& packet)
         uint32_t pgn = packet.data()[5] | (packet.data()[6] << 8) | (packet.data()[7] << 8);
         if (pgn != message()->pgn())
         {
-          _state = None;
           abort(AbortDuplicateConnection);
           break;
         }

@@ -36,6 +36,7 @@ public:
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
   virtual bool                    is_complete() const  { return (_state == None); }
+  virtual void                    on_abort() { _state = None; }
 
           bool                    send_bam(CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
           bool                    send_data(uint8_t sequence, CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());

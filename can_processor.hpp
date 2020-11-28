@@ -116,7 +116,7 @@ public:
           CanDeviceDatabase&      device_db() { return _device_db; }
           const CanDeviceDatabase& device_db() const { return _device_db; }
 
-          bool                    send_raw_packet(const CanPacket& packet,const std::string& bus,ConfirmationCallback fn = ConfirmationCallback());
+          bool                    send_raw_packet(const CanPacket& packet,const std::string& bus_name,ConfirmationCallback fn = ConfirmationCallback());
           void                    register_pgn_receiver(uint32_t pgn, PGNCallback fn);
           void                    register_updater(UpdateCallback fn);
           void                    register_bus_callback(const std::string& bus_name, BusStatusCallback fn);
@@ -190,23 +190,6 @@ private:
     ConfirmationCallback          _callback;
   };
   fixed_list<PacketConfirmation>  _confirm_callbacks;
-
-  /**
-   * \struct ReceivedMessages
-   *
-   */
-  struct ReceivedMessages
-  {
-    ReceivedMessages() = default;
-    ReceivedMessages(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
-    : _message(message), _local(local), _remote(remote), _bus_name(bus_name)
-    { }
-    CanMessagePtr                   _message;
-    LocalECUPtr                     _local;
-    RemoteECUPtr                    _remote;
-    std::string                     _bus_name;
-  };
-  fifo<ReceivedMessages>          _received_messages;
 };
 
 

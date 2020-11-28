@@ -29,6 +29,7 @@ public:
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
   virtual bool                    is_complete() const {return _complete; }
+  virtual void                    on_abort() { _complete = true; }
 
           size_t                  num_sequences() const { return  (message()->length() - 1) / 7 + 1; }
           bool                    sequence_received(uint8_t sequence, const uint8_t[7]);
