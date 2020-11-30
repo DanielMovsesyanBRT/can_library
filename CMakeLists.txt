@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(SOURCES
     can_device_database.cpp
     can_ecu.cpp
+    can_library.cpp
     can_message.cpp
     can_name.cpp
     can_processor.cpp

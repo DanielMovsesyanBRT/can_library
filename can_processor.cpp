@@ -20,9 +20,10 @@ namespace can {
  * @param  cback : Callback* 
  */
 CanProcessor::CanProcessor(Callback* cback)
-: _cback(cback)
+: CanInterface(cback)
 , _mutex(this)
 , _device_db(this)
+, _remote_name_counter(0)
 {
   _transport_stack.push_back(std::make_shared<SimpleTransport>(this));
   _transport_stack.push_back(std::make_shared<CanTransportProtocol>(this));
@@ -43,10 +44,7 @@ CanProcessor::~CanProcessor()
  */
 void CanProcessor::update()
 {
-  if (_cback == nullptr)
-    return;
-
-  uint64_t time_tick = _cback->get_time_tick();
+  uint64_t time_tick = get_time_tick();
 
   {
     std::lock_guard<RecoursiveMutex> l(_mutex);
@@ -79,7 +77,7 @@ void CanProcessor::update()
       {
         while (!bus.second._packet_fifo.empty())
         {
-          _cback->send_can_packet(bus.first, bus.second._packet_fifo.front());
+          cback()->send_can_packet(bus.first, bus.second._packet_fifo.front());
           bus.second._packet_fifo.pop();
         }
       }
@@ -95,9 +93,6 @@ void CanProcessor::update()
  */
 bool CanProcessor::register_can_bus(const std::string& bus_name)
 {
-  if (_cback == nullptr)
-    return false;
-
   {
     std::lock_guard<RecoursiveMutex> l(_mutex);
     if (_bus_map.find(bus_name) != _bus_map.end())
@@ -110,7 +105,7 @@ bool CanProcessor::register_can_bus(const std::string& bus_name)
   Bus bus;
   bus._bus_name       = bus_name;
   bus._status         = eBusWaitForSuccesfullTX;
-  bus._time_tag       = _cback->get_time_tick();
+  bus._time_tag       = get_time_tick();
   bus._initial_packet_id = packet.unique_id();
 
   {
@@ -134,7 +129,7 @@ bool CanProcessor::register_can_bus(const std::string& bus_name)
             else
               bus.second._status = eBusInactive;
               
-            bus.second._time_tag = _cback->get_time_tick();
+            bus.second._time_tag = get_time_tick();
             for (auto iter = bus.second._bus_callbacks.begin(); iter != bus.second._bus_callbacks.end(); )
             {
               if ((*iter) && (*iter)(bus.first, bus.second._status))
@@ -155,7 +150,7 @@ bool CanProcessor::register_can_bus(const std::string& bus_name)
   }
 
   _device_db.create_bus(bus_name);
-  _cback->send_can_packet(bus_name, packet);
+  cback()->send_can_packet(bus_name, packet);
   return true;
 }
 
@@ -170,7 +165,7 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
   if (packet.is_broadcast())
   {
     fixed_list<LocalECUPtr> ecus;
-    _device_db.get_local_ecus(ecus, bus_name);
+    _device_db.get_local_ecus(ecus, { bus_name });
     for (auto ecu : ecus)
     {
       if (ecu)
@@ -283,6 +278,23 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
 }
 
 /**
+ * \fn  CanProcessor::register_abstract_remote_ecu
+ *
+ * @param  address : uint8_t 
+ * @param  & bus : const std::string
+ * @return  RemoteECUPtr
+ */
+RemoteECUPtr CanProcessor::register_abstract_remote_ecu(uint8_t address,const std::string& bus)
+{
+  CanName name(_remote_name_counter++);
+  RemoteECUPtr remote = RemoteECUPtr(new RemoteECU(this, name));
+  if (!_device_db.add_remote_abstract_ecu(remote, bus, address))
+    return RemoteECUPtr();
+
+  return remote;
+}
+
+/**
  * \fn  CanProcessor::destroy_local_ecu
  *
  * @param  local : LocalECUPtr 
@@ -321,9 +333,6 @@ bool CanProcessor::destroy_local_ecu(const CanName& name)
  */
 bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string& bus_name)
 {
-  if (_cback == nullptr)
-    return false;
-
   LocalECUPtr   local;
   if (!packet.is_broadcast())
   {
@@ -399,7 +408,7 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
 void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
                                    RemoteECUPtr remote,const std::string& bus_name)
 {
-  _cback->message_received(message, local, remote, bus_name);
+  cback()->message_received(message, local, remote, bus_name);
 }
 
 
@@ -465,9 +474,6 @@ void CanProcessor::can_packet_confirm(const CanPacket& packet,CanMessageConfirma
 bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bus_name,
                       ConfirmationCallback fn/* = ConfirmationCallback()*/)
 {
-  if (_cback == nullptr)
-    return false;
-
   std::lock_guard<RecoursiveMutex> l(_mutex);
   auto bus = _bus_map.find(bus_name);
   if (bus == _bus_map.end())
@@ -490,7 +496,7 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bu
     bus->second._packet_fifo.push(packet);
   }
   else
-    _cback->send_can_packet(bus_name,packet);
+    cback()->send_can_packet(bus_name,packet);
 
   return true;
 }
@@ -534,6 +540,15 @@ void CanProcessor::register_bus_callback(const std::string& bus_name, BusStatusC
   bus->second._bus_callbacks.push_back(fn);
 }
 
+/**
+ * \fn  CanProcessor::get_time_tick
+ *
+ * @return  uint64_t
+ */
+uint64_t CanProcessor::get_time_tick() const
+{
+  return cback()->get_time_tick_nanoseconds() / 1000000llu;
+}
 
 } // can
 } // brt

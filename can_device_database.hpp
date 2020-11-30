@@ -45,8 +45,13 @@ public:
       
           bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
           bool                    remove_local_ecu(const CanName& ecu_name,const std::string& bus_name);
+          
+          bool                    add_remote_abstract_ecu(RemoteECUPtr ecu, const std::string& bus_name,uint8_t address);
 
-          void                    get_local_ecus(fixed_list<LocalECUPtr>& list, const std::string& bus_name = "");
+          void                    get_local_ecus(fixed_list<LocalECUPtr>& list, 
+                                                const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+          void                    get_remote_ecus(fixed_list<RemoteECUPtr>& list, 
+                                                const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
 
 private:
           void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
@@ -63,7 +68,6 @@ private:
   mutable Mutex                   _mutex;
   
   DeviceMap                       _device_map;
-  //  std::unordered_map<uint64_t,CanECUPtr> _remote_devices;
   fixed_list<CanECUPtr>           _remote_devices;
 };
 

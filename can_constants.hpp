@@ -1211,6 +1211,15 @@ enum MFCodes
   mf_Thomas_G_Faria_Co = 1863,
 };
 
+/**
+ * \enum CanMessageConfirmation
+ *
+ */
+enum CanMessageConfirmation
+{
+  eMessageSent,
+  eMessageFailed
+};
 
 
 #define PGN_ProprietaryB(x)                 PGN_ProprietaryB_start + ((x) & 0xFF)

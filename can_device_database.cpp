@@ -409,16 +409,41 @@ bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const std::stri
 }
 
 /**
+ * \fn  CanDeviceDatabase::add_remote_abstract_ecu
+ *
+ * @param  ecu : RemoteECUPtr 
+ * @param  & bus_name :  const std::string
+ * @param  address : uint8_t 
+ * @return  bool
+ */
+bool CanDeviceDatabase::add_remote_abstract_ecu(RemoteECUPtr ecu, 
+                const std::string& bus_name,uint8_t address)
+{
+  std::lock_guard<Mutex> l(_mutex);
+  auto bus_iter = _device_map.find(bus_name);
+  if (bus_iter == _device_map.end())
+    return false;
+
+  BusMap& bus_map = bus_iter->second;
+  if (bus_map[address])
+    return false;
+
+  bus_map[address] = ecu;
+  return true;
+}
+
+/**
  * \fn  CanDeviceDatabase::get_local_ecus
  *
- * @param  >& list : fixed_list<LocalECUPtr
- * @param  & bus_name :  const std::string
+ * @param  list : fixed_list<LocalECUPtr>& 
+ * @param  buses :  const std::initializer_list<std::string>&
  */
-void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, const std::string& bus_name /*= ""*/)
+void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, 
+                      const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string>()*/)
 {
   std::lock_guard<Mutex> l(_mutex);
 
-  if (bus_name.empty())
+  if (buses.size() == 0)
   {
     for (auto bus_map : _device_map)
     {
@@ -431,13 +456,55 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, const std:
   }
   else
   {
-    auto bus_map = _device_map.find(bus_name);
-    if (bus_map != _device_map.end())
+    for (auto bus_name : buses)
     {
-      for (auto device : bus_map->second)
+      auto bus_map = _device_map.find(bus_name);
+      if (bus_map != _device_map.end())
       {
-        if (is_local_ecu(device))
-          list.push(dynamic_shared_cast<LocalECU>(device));
+        for (auto device : bus_map->second)
+        {
+          if (is_local_ecu(device))
+            list.push(dynamic_shared_cast<LocalECU>(device));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * \fn  CanDeviceDatabase::get_remote_ecus
+ *
+ * @param  list : fixed_list<RemoteECUPtr>& 
+ * @param  buses :  const std::initializer_list<std::string>&
+ */
+void CanDeviceDatabase::get_remote_ecus(fixed_list<RemoteECUPtr>& list, 
+                      const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string>()*/)
+{
+  std::lock_guard<Mutex> l(_mutex);
+
+  if (buses.size() == 0)
+  {
+    for (auto bus_map : _device_map)
+    {
+      for (auto device : bus_map.second)
+      {
+        if (is_remote_ecu(device))
+          list.push(dynamic_shared_cast<RemoteECU>(device));
+      }
+    }
+  }
+  else
+  {
+    for (auto bus_name : buses)
+    {
+      auto bus_map = _device_map.find(bus_name);
+      if (bus_map != _device_map.end())
+      {
+        for (auto device : bus_map->second)
+        {
+          if (is_remote_ecu(device))
+            list.push(dynamic_shared_cast<RemoteECU>(device));
+        }
       }
     }
   }
