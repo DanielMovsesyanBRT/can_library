@@ -15,6 +15,7 @@
 #include <memory>
 #include <atomic>
 #include <algorithm>
+#include <functional>
 
 #include "can_constants.hpp"
 #include "can_utils.hpp"
@@ -178,6 +179,7 @@ private:
   uint8_t                         _data[0];
 };
 
+class CanInterface;
 /**
  * \class CanMessagePtr
  *
@@ -190,62 +192,15 @@ friend class CanMessage;
 public:
   CanMessagePtr() {}
 
-  explicit CanMessagePtr(const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
-                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
-  { 
-    CanMessage* msg = nullptr;
-    if (data.size() <= 8)
-      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
-    else if (data.size() <= (255*7))
-      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
+  explicit CanMessagePtr(CanInterface*, const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
-    if (msg != nullptr)
-    {
-      ::new (msg) CanMessage(data.begin(), data.size(), pgn, priority, cback);
-      reset(msg);
-    }
-  }
+  explicit CanMessagePtr(CanInterface*, const uint8_t* data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
-  explicit CanMessagePtr(const uint8_t* data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
-                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
-  { 
-    CanMessage* msg = nullptr;
-    if (length <= 8)
-      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
-    else if (length <= (255*7))
-      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
+  explicit CanMessagePtr(CanInterface*, uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
-    if (msg != nullptr)
-    {
-      ::new (msg) CanMessage(data, length, pgn, priority, cback);
-      reset(msg);
-    }
-  }
-
-  explicit CanMessagePtr(uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
-                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback())
-  { 
-    CanMessage* msg = nullptr;
-    if (length <= 8)
-      msg = reinterpret_cast<CanMessage*>(_small_packet_allocator.allocate());
-    else if (length <= (255*7))
-      msg = reinterpret_cast<CanMessage*>(_big_packet_allocator.allocate());
-
-    if (msg != nullptr)
-    {
-      ::new (msg) CanMessage(nullptr, length, pgn, priority, cback);
-      reset(msg);
-    }
-  }
-
-
-
-private: 
-  typedef allocator<CanMessage,255*7> big_packet_allocator;
-  typedef allocator<CanMessage,8>     small_packet_allocator;
-  
-  static  big_packet_allocator    _big_packet_allocator;
-  static  small_packet_allocator  _small_packet_allocator;
 };
 
 } // can

@@ -58,10 +58,10 @@ private:
           uint8_t                 find_free_address(BusMap& bus_map);
           
           bool                    is_local_ecu(CanECUPtr ecu) 
-          { return dynamic_shared_cast<LocalECU>(ecu).get() != nullptr; }
+          { return LocalECUPtr(ecu).get() != nullptr; }
 
           bool                    is_remote_ecu(CanECUPtr ecu) 
-          { return dynamic_shared_cast<RemoteECU>(ecu).get() != nullptr; }
+          { return RemoteECUPtr(ecu).get() != nullptr; }
 
 private:
   CanProcessor*                   _processor;
@@ -69,6 +69,7 @@ private:
   
   DeviceMap                       _device_map;
   fixed_list<CanECUPtr>           _remote_devices;
+  fixed_list<LocalECUPtr,32>      _prerecorded_local_devices;
 };
 
 } // can

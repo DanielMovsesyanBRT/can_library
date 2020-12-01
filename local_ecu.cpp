@@ -14,7 +14,6 @@
 namespace brt {
 namespace can {
 
-allocator<LocalECU> LocalECU::_allocator;
 /**
  * \fn  constructor LocalECU::LocalECU
  *
@@ -172,6 +171,35 @@ void LocalECU::disable_device(const std::string& bus)
   if (stat != _container_map.end())
     stat->second._status = eInavtive;
 }
+
+/**
+ * \fn  delete
+ *
+ * @param  ptr : void* 
+ * @return  void LocalECUPtr::operator
+ */
+void LocalECU::operator delete  ( void* ptr )
+{
+  if (!allocator<LocalECU>::free(ptr))
+    ::free(ptr);
+}
+
+/**
+ * \fn  constructor LocalECUPtr::LocalECUPtr
+ *
+ * @param  processor : CanProcessor* 
+ * @param  name : const CanName& 
+ */
+LocalECUPtr::LocalECUPtr(CanProcessor* processor,const CanName& name /*= CanName()*/)
+{
+  LocalECU* ecu = reinterpret_cast<LocalECU*>(processor->cfg().local_ecu_allocator().allocate());
+  if (ecu == nullptr)
+    ecu = reinterpret_cast<LocalECU*>(::malloc(sizeof(LocalECU)));
+
+  ::new (ecu) LocalECU(processor,name);
+  reset(ecu);
+}
+
 
 } // can
 } // brt

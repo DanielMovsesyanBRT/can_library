@@ -13,6 +13,8 @@
 #include <array>
 #include <stdexcept>
 #include <algorithm>
+#include <typeinfo>
+#include <vector>
 
 namespace brt {
 namespace can {
@@ -195,7 +197,7 @@ public:
   friend fixed_list<_Type,_Size>;
     typedef fixed_list<_Type,_Size>::filler _Raw;
     
-    const_iterator(_Raw* ptr,_Raw* end) : _ptr(ptr), _end(end)
+    const_iterator(const _Raw* ptr,const _Raw* end) : _ptr(ptr), _end(end)
     {
       while (_ptr < _end && _ptr->_empty)
         _ptr++;
@@ -204,8 +206,8 @@ public:
   public:
     typedef const_iterator self_type;
     typedef _Type value_type;
-    typedef _Type& reference;
-    typedef _Type* pointer;
+    typedef const _Type& reference;
+    typedef const _Type* pointer;
     typedef std::forward_iterator_tag iterator_category;
     typedef ptrdiff_t difference_type;
 
@@ -231,14 +233,14 @@ public:
       return __r;
     }
 
-    reference operator*() { return _ptr->_v; }
-    pointer operator->() { return &_ptr->_v; }
-    bool operator==(const self_type& rhs) { return _ptr == rhs._ptr; }
-    bool operator!=(const self_type& rhs) { return _ptr != rhs._ptr; }
+    reference operator*() const { return _ptr->_v; }
+    pointer operator->() const { return &_ptr->_v; }
+    bool operator==(const self_type& rhs) const { return _ptr == rhs._ptr; }
+    bool operator!=(const self_type& rhs) const { return _ptr != rhs._ptr; }
 
   private:
-    filler*                         _ptr;
-    filler*                         _end;
+    const filler*                   _ptr;
+    const filler*                   _end;
   };
 
   typedef _Type& reference;
@@ -321,48 +323,67 @@ public:
   const_iterator find_if(_Predicate p) const { return std::find_if(begin(), end(), p);  }
 };
 
+
 /**
  * \class allocator
  *
  *  Fixe size allocator for real time operations
  */
-template<typename _Type,size_t _Extrasize = 0,size_t _Poolsize = 1024>
+template<typename _Type,size_t _Extrasize = 0>
 class allocator
 {
   struct filler
   {
-    filler() : _empty(true) {}
-    uint8_t  _v[sizeof(_Type) + _Extrasize];
-    bool    _empty;
+    filler() : _empty(true), _allocator(nullptr), _keyword(typeid(_Type).hash_code()) 
+    { }
+
+    uint8_t   _v[sizeof(_Type) + _Extrasize]   __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
+    std::atomic_bool              _empty;
+    
+    allocator<_Type, _Extrasize>* _allocator;
+    size_t                        _keyword;
   };
-  std::array<filler,_Poolsize>  _buffer;
+
+  filler*                         _buffer;
+  size_t                          _pool_size;
 
 public:
-  allocator() {}
-  ~allocator() {}
+  
+  allocator(size_t pool_size = 1024) 
+  : _pool_size(pool_size)
+  { 
+    _buffer = new filler[pool_size];
+
+    for (size_t index = 0; index < pool_size; index++)
+      _buffer[index]._allocator = this;
+  }
+
+  ~allocator() 
+  {
+    delete[] _buffer;
+  }
 
   void*  allocate()
   {
-    for (size_t index = 0; index < _buffer.size(); index++)
+    for (size_t index = 0; index < _pool_size; index++)
     {
-      if (_buffer[index]._empty)
-      {
-        _buffer[index]._empty = false;
+      bool expected = true;
+      if (_buffer[index]._empty.compare_exchange_strong(expected, false))
         return &_buffer[index]._v[0];
-      }
     }
     return nullptr;
   }
 
-  bool free(void* ptr)
+  static bool free(void* ptr)
   {
     filler* fl = reinterpret_cast<filler*>(ptr);
-    if ((fl < _buffer.data()) || (fl > (_buffer.data() + _buffer.size() - 1)))
+    if (fl->_keyword != typeid(_Type).hash_code())
       return false;
 
-    fl->_empty = true;
+    fl->_empty.store(true);
     return true;
   }
+
 };
 
 
@@ -400,6 +421,8 @@ template<typename _Class>
 class shared_pointer
 {
 public:
+  typedef _Class  SelfType;
+
   shared_pointer() : _ptr(nullptr) {}
   
   shared_pointer(_Class* ptr) : _ptr(ptr) 
@@ -469,9 +492,6 @@ public:
     return *this;
   }
 
-  // _Class operator*() const
-  // { return *_ptr; }
-
   _Class* operator->() const
   { return _ptr; }
 
@@ -495,6 +515,7 @@ private:
   _Class*                         _ptr;
 };
 
+
 template<typename _Tp, typename _Up>
 inline shared_pointer<_Tp> dynamic_shared_cast(const shared_pointer<_Up>& __r) noexcept
 {
@@ -503,9 +524,6 @@ inline shared_pointer<_Tp> dynamic_shared_cast(const shared_pointer<_Up>& __r) n
 	  return _Sp(__p);
   return _Sp();
 }
-
-// template<typename T>
-// class shared_pointer
 
 
 class CanProcessor;
@@ -544,6 +562,30 @@ public:
 private:
   std::atomic_uint32_t            _lock_counter;
   std::atomic_uint32_t            _thread_id;
+};
+
+/**
+ * \struct LibraryConfig
+ *
+ */
+struct LibraryConfig
+{
+  LibraryConfig() 
+  // Default Values
+  : _local_ecu_pool_size(1024)
+  , _remote_ecu_pool_size(1024)
+  , _big_messages_pool_size(1024)
+  , _small_messages_pool_size(1024)
+  , _tx_tpsessions_pool_size(32)
+  , _rx_tpsessions_pool_size(32)
+  {  }
+
+  size_t                          _local_ecu_pool_size;
+  size_t                          _remote_ecu_pool_size;
+  size_t                          _big_messages_pool_size;
+  size_t                          _small_messages_pool_size;
+  size_t                          _tx_tpsessions_pool_size;
+  size_t                          _rx_tpsessions_pool_size;
 };
 
 

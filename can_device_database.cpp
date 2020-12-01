@@ -117,6 +117,12 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::stri
     }
   }
   
+  auto iter = _prerecorded_local_devices.find_if([name](const LocalECUPtr& local)->bool
+  { return name.data64() == local->name().data64(); });
+
+  if (iter != _prerecorded_local_devices.end())
+    return *iter;
+
   return CanECUPtr();
 }
 
@@ -222,7 +228,7 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
     // Check if this is a new Remote device sending address claim
     if (!is_remote_ecu(by_name))
     { 
-      remote.reset(new RemoteECU(_processor, name));
+      remote = RemoteECUPtr(_processor, name);
       by_name = remote;
       
       // Register new device in the Remote Database
@@ -240,7 +246,7 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
     else if (is_local_ecu(by_addr))
     {
       // Address Collision - We need to activate ISO 11783-5 address negotiation protocol
-      local = dynamic_shared_cast<LocalECU>(by_addr);
+      local = LocalECUPtr(by_addr);
       // Note: we don't process name == name situation, since it will be 
       // processed by the code above  
       if (local->name().data64() < name.data64())
@@ -307,13 +313,24 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
       return true;
     });
 
+    std::lock_guard<Mutex> l(_mutex);
+    _prerecorded_local_devices.push(ecu);
+
     return true;
-  }  
+  }
   
   bool claim = false;
-  
   {
     std::lock_guard<Mutex> l(_mutex);
+    
+    // Remove local device from prerecorded list
+    auto iter = _prerecorded_local_devices.find_if([ecu](const LocalECUPtr& local)->bool
+    { 
+      return ecu == local; 
+    });
+
+    if (iter != _prerecorded_local_devices.end())
+      _prerecorded_local_devices.erase(iter);
 
     auto bus_map = _device_map.find(bus_name);
     if (bus_map == _device_map.end())
@@ -394,7 +411,7 @@ bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const std::stri
   BusMap& bus_map = bus_iter->second;
   for (size_t index = 0; index < bus_map.size(); index++)
   {
-    LocalECUPtr local = dynamic_shared_cast<LocalECU>(bus_map[index]);
+    LocalECUPtr local(bus_map[index]);
     if (!local)
       continue;
     
@@ -450,7 +467,7 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list,
       for (auto device : bus_map.second)
       {
         if (is_local_ecu(device))
-          list.push(dynamic_shared_cast<LocalECU>(device));
+          list.push(LocalECUPtr(device));
       }
     }
   }
@@ -464,7 +481,7 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list,
         for (auto device : bus_map->second)
         {
           if (is_local_ecu(device))
-            list.push(dynamic_shared_cast<LocalECU>(device));
+            list.push(LocalECUPtr(device));
         }
       }
     }
@@ -489,7 +506,7 @@ void CanDeviceDatabase::get_remote_ecus(fixed_list<RemoteECUPtr>& list,
       for (auto device : bus_map.second)
       {
         if (is_remote_ecu(device))
-          list.push(dynamic_shared_cast<RemoteECU>(device));
+          list.push(RemoteECUPtr(device));
       }
     }
   }
@@ -503,7 +520,7 @@ void CanDeviceDatabase::get_remote_ecus(fixed_list<RemoteECUPtr>& list,
         for (auto device : bus_map->second)
         {
           if (is_remote_ecu(device))
-            list.push(dynamic_shared_cast<RemoteECU>(device));
+            list.push(RemoteECUPtr(device));
         }
       }
     }

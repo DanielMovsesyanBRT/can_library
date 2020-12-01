@@ -10,6 +10,7 @@
 namespace brt {
 namespace can {
 
+class RxSessionPtr;
 /**
  * \class RxSession
  *
@@ -18,13 +19,15 @@ namespace can {
  */
 class RxSession : public TransportSession
 {
-public:
+friend RxSessionPtr;
   RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
                               const std::string& bus_name, const CanPacket& packet);
+
+public:
   virtual ~RxSession() {}
           
-  virtual LocalECUPtr             local() { return dynamic_shared_cast<LocalECU>(destination_ecu()); }
-  virtual RemoteECUPtr            remote() { return dynamic_shared_cast<RemoteECU>(source_ecu()); }
+  virtual LocalECUPtr             local() { return LocalECUPtr(destination_ecu()); }
+  virtual RemoteECUPtr            remote() { return RemoteECUPtr(source_ecu()); }
   
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
@@ -40,11 +43,7 @@ public:
                     
           void                    message_complete();
 
-          void* operator new( size_t count )  { return _allocator.allocate(); }
-          void operator delete  ( void* ptr )  {  _allocator.free(ptr); }
-
-private:
-  static  allocator<RxSession,0,32> _allocator;
+          void operator delete  ( void* ptr );
 
 private:
   std::array<bool,MAX_TP_PACKETS> _received_map;
@@ -59,7 +58,20 @@ private:
   bool                            _complete;
 };
 
-typedef shared_pointer<RxSession> RxSessionPtr;
+/**
+ * \class RxSessionPtr
+ *
+ * Inherited from :
+ *             shared_pointer 
+ *             RxSession 
+ */
+class RxSessionPtr : public shared_pointer<RxSession>
+{
+public:
+  RxSessionPtr() {}
+  RxSessionPtr(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
+                              const std::string& bus_name, const CanPacket& packet);
+};
 
 
 } // can

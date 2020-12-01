@@ -20,6 +20,7 @@ namespace brt {
 namespace can {
 
 class CanDeviceDatabase;
+class LocalECUPtr;
 /**
  * \class LocalECU
  *
@@ -29,6 +30,7 @@ class LocalECU : public CanECU
 public:
 friend CanProcessor;
 friend CanDeviceDatabase;
+friend LocalECUPtr;
   /**
    * \enum ECUStatus
    *
@@ -40,27 +42,16 @@ friend CanDeviceDatabase;
     eActive
   };
 
-  LocalECU(CanProcessor*,const CanName& name = CanName());
   virtual ~LocalECU();
 
-          void* operator new( size_t count )
-          { 
-            return _allocator.allocate(); 
-          }
-
-          void operator delete  ( void* ptr )
-          { 
-            _allocator.free(ptr); 
-          }
+          void operator delete  ( void* ptr );
 
 private:
+  LocalECU(CanProcessor*,const CanName& name = CanName());
           void                    claim_address(uint8_t address,const std::string& bus_name);
           void                    disable_device(const std::string& bus_name);
 
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote,const std::string& bus_name);
-
-private:
-  static  allocator<LocalECU>     _allocator;
 
 private:
   Mutex                           _mutex;
@@ -97,8 +88,22 @@ private:
   ContainerMap                    _container_map;
 };
 
-//typedef std::shared_ptr<LocalECU>   LocalECUPtr;
-typedef shared_pointer<LocalECU>   LocalECUPtr;
+
+/**
+ * \class LocalECUPtr
+ *
+ * Inherited from :
+ *             shared_pointer 
+ *             LocalECU 
+ */
+class LocalECUPtr : public shared_pointer<LocalECU>
+{
+public:
+  LocalECUPtr() {}
+  explicit LocalECUPtr(CanProcessor* processor,const CanName& name = CanName());
+  explicit LocalECUPtr(CanECUPtr ecu)
+  {  reset(dynamic_cast<LocalECU*>(ecu.get())); }
+};
 
 
 } // can

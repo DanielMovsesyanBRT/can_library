@@ -44,7 +44,8 @@ CanTransportProtocol::CanTransportProtocol(CanProcessor* processor)
  */
 CanTransportProtocol::~CanTransportProtocol()
 {
-
+  _session_stack[eTransmit]._session_queue.clear();
+  _session_stack[eReceive]._session_queue.clear();
 }
 
 /**
@@ -62,7 +63,7 @@ bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local
     return false;
 
   std::lock_guard<Mutex> lock(_mutex);
-  _session_stack[eTransmit].add(TransportSessionPtr(new TxSession(processor(), &_mutex, message, local, remote, bus_name)));
+  _session_stack[eTransmit].add(TxSessionPtr(processor(), &_mutex, message, local, remote, bus_name));
   return true;
 }
 
@@ -90,8 +91,8 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
   if (packet.dlc() < 8)
     return;
 
-  LocalECUPtr local = dynamic_shared_cast<LocalECU>(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
-  RemoteECUPtr remote = dynamic_shared_cast<RemoteECU>(processor()->device_db().get_ecu_by_address(packet.sa(),bus_name));
+  LocalECUPtr local(processor()->device_db().get_ecu_by_address(packet.da(),bus_name));
+  RemoteECUPtr remote(processor()->device_db().get_ecu_by_address(packet.sa(),bus_name));
 
   if (packet.pgn() == PGN_TP_CM)
   {
@@ -138,7 +139,7 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
         if (session)
           // Ignoring this session
           break;
-        _session_stack[eReceive].add(TransportSessionPtr(new RxSession(processor(), &_mutex, remote, local, bus_name, packet)));
+        _session_stack[eReceive].add(RxSessionPtr(processor(), &_mutex, remote, local, bus_name, packet));
       }
       break;
 

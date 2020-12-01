@@ -12,6 +12,8 @@ namespace brt {
 namespace can {
 
 
+class TxSessionPtr;
+
 /**
  * \class TxSession
  *
@@ -20,7 +22,8 @@ namespace can {
  */
 class TxSession : public TransportSession
 {
-public:
+friend TxSessionPtr;
+
   TxSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr source,CanECUPtr destination,const std::string& bus_name)
   : TransportSession(processor, mutex, message,  source, destination, bus_name)
   , _range(), _current(0), _time_tag(0), _timeout_value(0)
@@ -28,10 +31,11 @@ public:
     _state = (is_broadcast()) ? SendBAM : SendRTS;
   }
 
+public:
   virtual ~TxSession()  {}
 
-  virtual LocalECUPtr             local() { return dynamic_shared_cast<LocalECU>(source_ecu()); }
-  virtual RemoteECUPtr            remote() { return dynamic_shared_cast<RemoteECU>(destination_ecu()); }
+  virtual LocalECUPtr             local() { return LocalECUPtr(source_ecu()); }
+  virtual RemoteECUPtr            remote() { return RemoteECUPtr(destination_ecu()); }
 
   virtual void                    update();
   virtual void                    pgn_received(const CanPacket& packet);
@@ -42,11 +46,7 @@ public:
           bool                    send_data(uint8_t sequence, CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
           bool                    send_rts( CanMessage::ConfirmationCallback = CanMessage::ConfirmationCallback());
 
-          void* operator new( size_t count )  { return _allocator.allocate(); }
-          void operator delete  ( void* ptr )  {  _allocator.free(ptr); }
-
-private:
-  static  allocator<TxSession,0,32>  _allocator;
+          void operator delete  ( void* ptr );
 
 private:
   enum TxStates
@@ -66,7 +66,20 @@ private:
   uint64_t                        _timeout_value;
 };
 
-typedef shared_pointer<TxSession> TxSessionPtr;
+
+/**
+ * \class TxSessionPtr
+ *
+ * Inherited from :
+ *             shared_pointer 
+ *             TxSession 
+ */
+class TxSessionPtr : public shared_pointer<TxSession>
+{
+public:
+  TxSessionPtr() {}
+  TxSessionPtr(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr source,CanECUPtr destination,const std::string& bus_name);
+};
 
 } // can
 } // brt

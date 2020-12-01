@@ -20,10 +20,14 @@
 
 #include "can_library.hpp"
 #include "can_utils.hpp"
+#include "can_device_database.hpp"
+
 #include "can_message.hpp"
 #include "local_ecu.hpp"
 #include "remote_ecu.hpp"
-#include "can_device_database.hpp"
+#include "transport_protocol/can_transport_rxsession.hpp"
+#include "transport_protocol/can_transport_txsession.hpp"
+
 #include "can_protocol.hpp"
 
 namespace brt {
@@ -42,18 +46,47 @@ enum CanBusStatus
 };
 
 /**
+ * \class CanLibConfigurator
+ *
+ */
+class CanLibConfigurator
+{
+public:
+  CanLibConfigurator(const LibraryConfig&);
+  ~CanLibConfigurator() {}
+
+  allocator<CanMessage,255*7>&    big_msg_allocator()  { return _big_msg_allocator; }
+  allocator<CanMessage,8>&        small_msg_allocator()  { return _small_msg_allocator; }
+  allocator<LocalECU>&            local_ecu_allocator()  { return _local_ecu_allocator; }
+  allocator<RemoteECU>&           remote_ecu_allocator()  { return _remote_ecu_allocator; }
+  allocator<TxSession>&           tx_tpsessions_allocator()  { return _tx_tpsessions_allocator; }
+  allocator<RxSession>&           rx_tpsessions_allocator()  { return _rx_tpsessions_allocator; }
+
+private:
+  allocator<CanMessage,255*7>     _big_msg_allocator;
+  allocator<CanMessage,8>         _small_msg_allocator;
+  allocator<LocalECU>             _local_ecu_allocator;
+  allocator<RemoteECU>            _remote_ecu_allocator;
+  allocator<TxSession>            _tx_tpsessions_allocator;
+  allocator<RxSession>            _rx_tpsessions_allocator;
+};
+
+/**
  * \class CanProcessor
  *
  */
 class CanProcessor : public CanInterface
 {
+friend CanInterface* create_can_interface(CanInterface::Callback*,const LibraryConfig&);
+private:
+  CanProcessor(Callback*,const LibraryConfig& cfg);
+
 public:
   typedef std::function<void(uint64_t,CanMessageConfirmation)>      ConfirmationCallback;
   typedef std::function<void(const CanPacket&,const std::string&)>  PGNCallback;
   typedef std::function<bool()>                                     UpdateCallback;
   typedef std::function<bool(const std::string&,CanBusStatus)>      BusStatusCallback;
 
-  CanProcessor(Callback*);
   virtual ~CanProcessor();
 
   virtual void                    update();
@@ -71,7 +104,7 @@ public:
 
   virtual LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
-                                            const std::vector<std::string>& desired_buses = std::vector<std::string>());
+                                            const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus);
 
   virtual bool                    destroy_local_ecu(LocalECUPtr);
@@ -89,6 +122,7 @@ public:
           
           CanDeviceDatabase&      device_db() { return _device_db; }
           const CanDeviceDatabase& device_db() const { return _device_db; }
+          CanLibConfigurator&     cfg() { return _cfg; }
 
           bool                    send_raw_packet(const CanPacket& packet,const std::string& bus_name,ConfirmationCallback fn = ConfirmationCallback());
           void                    register_pgn_receiver(uint32_t pgn, PGNCallback fn);
@@ -123,6 +157,7 @@ private:
 
   mutable RecoursiveMutex         _mutex;
   CanDeviceDatabase               _device_db;
+  CanLibConfigurator              _cfg;
   std::atomic_uint_fast64_t       _remote_name_counter;
 
   /**

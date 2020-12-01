@@ -14,28 +14,40 @@
 namespace brt {
 namespace can {
 
+
+class RemoteECUPtr;
 /**
  * \class RemoteECU
  *
  */
 class RemoteECU  : public CanECU
 {
+friend RemoteECUPtr;
 public:
-  RemoteECU(CanProcessor*,const CanName& name = CanName());
   virtual ~RemoteECU();
 
-          void* operator new( size_t count )
-          { return _allocator.allocate(); }
-
-          void operator delete  ( void* ptr )
-          { _allocator.free(ptr); }
+          void operator delete  ( void* ptr );
 
 private:
-  static  allocator<RemoteECU>    _allocator;
+  RemoteECU(CanProcessor*,const CanName& name = CanName());
 
 };
 
-typedef shared_pointer<RemoteECU> RemoteECUPtr;
+/**
+ * \class RemoteECUPtr
+ *
+ * Inherited from :
+ *             shared_pointer 
+ *             RemoteECU 
+ */
+class RemoteECUPtr : public shared_pointer<RemoteECU>
+{
+public:
+  RemoteECUPtr() {}
+  explicit RemoteECUPtr(CanProcessor*,const CanName& name = CanName());
+  explicit RemoteECUPtr(CanECUPtr ecu)
+  { reset( dynamic_cast<RemoteECU*>(ecu.get())); }
+};
 
 } // can
 } // brt

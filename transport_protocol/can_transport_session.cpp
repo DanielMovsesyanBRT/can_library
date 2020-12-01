@@ -22,7 +22,7 @@ void TransportSession::abort(uint8_t reason)
 {
   if (!is_broadcast() && (reason != AbortIgnoreMessage))
   {
-    CanMessagePtr msg( 
+    CanMessagePtr msg( _processor,
       {
         static_cast<uint8_t>(Abort), 
         static_cast<uint8_t>(reason),

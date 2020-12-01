@@ -15,14 +15,29 @@ namespace brt {
 namespace can {
 
 /**
+ * \fn  constructor CanLibConfigurator::CanLibConfigurator
+ *
+ * @param  lib_config : const LibraryConfig& 
+ */
+CanLibConfigurator::CanLibConfigurator(const LibraryConfig& lib_config)
+: _big_msg_allocator(lib_config._big_messages_pool_size)
+, _small_msg_allocator(lib_config._small_messages_pool_size)
+, _local_ecu_allocator(lib_config._local_ecu_pool_size)
+, _remote_ecu_allocator(lib_config._remote_ecu_pool_size)
+, _tx_tpsessions_allocator(lib_config._tx_tpsessions_pool_size)
+, _rx_tpsessions_allocator(lib_config._rx_tpsessions_pool_size)
+{  }
+
+/**
  * \fn  constructor CanProcessor::CanProcessor
  *
  * @param  cback : Callback* 
  */
-CanProcessor::CanProcessor(Callback* cback)
+CanProcessor::CanProcessor(Callback* cback,const LibraryConfig& cfg)
 : CanInterface(cback)
 , _mutex(this)
 , _device_db(this)
+, _cfg(cfg)
 , _remote_name_counter(0)
 {
   _transport_stack.push_back(std::make_shared<SimpleTransport>(this));
@@ -174,7 +189,7 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
   }
   else
   {
-    LocalECUPtr ecu = dynamic_shared_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    LocalECUPtr ecu(_device_db.get_ecu_by_address(packet.da(), bus_name));
     if (ecu)
       ecu->claim_address(ecu->get_address(bus_name), bus_name);
   }
@@ -215,36 +230,30 @@ size_t CanProcessor::get_all_buses(fixed_list<std::string,10>& buses) const
  * \fn  CanProcessor::create_local_ecu
  *
  * @param  name : const CanName& 
- * @param  desired_address :  uint8_t 
- * @param  desired_buses :  const std::vector<std::string>&
+ * @param  desired_address  :  uint8_t 
+ * @param  desired_buses :  const std::initializer_list<std::string>&
  * @return  LocalECUPtr
  */
 LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
                                             uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/,
-                                            const std::vector<std::string>& desired_buses /*= std::vector<std::string>()*/)
+                                            const std::initializer_list<std::string>& desired_buses /*= std::initializer_list<std::string>()*/)
 {
   CanECUPtr ecu = _device_db.get_ecu_by_name(name,"");
   if (ecu)
-    return dynamic_shared_cast<LocalECU>(ecu);
+    return LocalECUPtr(ecu);
 
   bool result = false;
-  LocalECUPtr local(new LocalECU(this, name));
-  if (desired_buses.empty()) // all buses
+  LocalECUPtr local(this, name);
+  if (desired_buses.size() == 0) // all buses
   {
-    std::vector<std::string> buses;
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    for (auto bus : _bus_map)
     {
-      std::lock_guard<RecoursiveMutex> l(_mutex);
-      for (auto bus : _bus_map)
-        buses.push_back(bus.first);
-    }
-
-    for (auto bus_name : buses)
-    {
-      if (!_device_db.add_local_ecu(local, bus_name, desired_address))
+      if (!_device_db.add_local_ecu(local, bus.first, desired_address))
       {
         // Unable to register device on the Bus
         // So we are going to disable it
-        local->disable_device(bus_name);
+        local->disable_device(bus.first);
       }
       else
         result = true;
@@ -287,7 +296,7 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
 RemoteECUPtr CanProcessor::register_abstract_remote_ecu(uint8_t address,const std::string& bus)
 {
   CanName name(_remote_name_counter++);
-  RemoteECUPtr remote = RemoteECUPtr(new RemoteECU(this, name));
+  RemoteECUPtr remote(this, name);
   if (!_device_db.add_remote_abstract_ecu(remote, bus, address))
     return RemoteECUPtr();
 
@@ -337,7 +346,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
   if (!packet.is_broadcast())
   {
     // First we need to check whether this packet is sent to any of our local devices
-    local = dynamic_shared_cast<LocalECU>(_device_db.get_ecu_by_address(packet.da(), bus_name));
+    local = LocalECUPtr(_device_db.get_ecu_by_address(packet.da(), bus_name));
     if (!local)
       return false; // Not our message
   }
@@ -355,9 +364,9 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
 
   RemoteECUPtr  remote;
   if (packet.sa() < NULL_CAN_ADDRESS)
-    remote = dynamic_shared_cast<RemoteECU>(_device_db.get_ecu_by_address(packet.sa(), bus_name));
+    remote = RemoteECUPtr(_device_db.get_ecu_by_address(packet.sa(), bus_name));
 
-  message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
+  message_received(CanMessagePtr(this, packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
   return true;
 }
 

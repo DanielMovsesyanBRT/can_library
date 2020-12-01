@@ -48,7 +48,7 @@ public:
   virtual void                    update() = 0;
   virtual LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
-                                            const std::vector<std::string>& desired_buses = std::vector<std::string>()) = 0;
+                                            const std::initializer_list<std::string>& buses = std::initializer_list<std::string>()) = 0;
 
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus) = 0;
 
@@ -74,7 +74,7 @@ private:
   Callback*                       _cback;
 };
 
-CanInterface* create_can_interface(CanInterface::Callback*);
+CanInterface* create_can_interface(CanInterface::Callback*,const LibraryConfig& cfg = LibraryConfig());
 
 } // can
 } // brt

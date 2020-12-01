@@ -26,11 +26,12 @@ CanInterface::CanInterface(Callback* callback)
  * \fn  create_can_interface
  *
  * @param   callback : CanInterface::Callback*
+ * @param  cfg : const LibraryConfig& 
  * @return  CanInterface*
  */
-CanInterface* create_can_interface(CanInterface::Callback* callback)
+CanInterface* create_can_interface(CanInterface::Callback* callback,const LibraryConfig& cfg /* = LibraryConfig()*/)
 {
-  return new CanProcessor(callback);
+  return new CanProcessor(callback, cfg);
 }
 
 
