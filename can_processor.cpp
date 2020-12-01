@@ -15,29 +15,14 @@ namespace brt {
 namespace can {
 
 /**
- * \fn  constructor CanLibConfigurator::CanLibConfigurator
- *
- * @param  lib_config : const LibraryConfig& 
- */
-CanLibConfigurator::CanLibConfigurator(const LibraryConfig& lib_config)
-: _big_msg_allocator(lib_config._big_messages_pool_size)
-, _small_msg_allocator(lib_config._small_messages_pool_size)
-, _local_ecu_allocator(lib_config._local_ecu_pool_size)
-, _remote_ecu_allocator(lib_config._remote_ecu_pool_size)
-, _tx_tpsessions_allocator(lib_config._tx_tpsessions_pool_size)
-, _rx_tpsessions_allocator(lib_config._rx_tpsessions_pool_size)
-{  }
-
-/**
  * \fn  constructor CanProcessor::CanProcessor
  *
  * @param  cback : Callback* 
  */
-CanProcessor::CanProcessor(Callback* cback,const LibraryConfig& cfg)
+CanProcessor::CanProcessor(Callback* cback)
 : CanInterface(cback)
 , _mutex(this)
 , _device_db(this)
-, _cfg(cfg)
 , _remote_name_counter(0)
 {
   _transport_stack.push_back(std::make_shared<SimpleTransport>(this));
@@ -366,7 +351,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
   if (packet.sa() < NULL_CAN_ADDRESS)
     remote = RemoteECUPtr(_device_db.get_ecu_by_address(packet.sa(), bus_name));
 
-  message_received(CanMessagePtr(this, packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
+  message_received(CanMessagePtr(packet.data(), packet.dlc(), packet.pgn(), packet.priority()), local, remote, bus_name);
   return true;
 }
 

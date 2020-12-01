@@ -23,6 +23,9 @@ class RemoteECUPtr;
 class RemoteECU  : public CanECU
 {
 friend RemoteECUPtr;
+friend bool can_library_init(const LibraryConfig&);
+friend bool can_library_release();
+
 public:
   virtual ~RemoteECU();
 
@@ -31,6 +34,7 @@ public:
 private:
   RemoteECU(CanProcessor*,const CanName& name = CanName());
 
+  static  allocator<RemoteECU>*   _allocator;
 };
 
 /**

@@ -20,6 +20,9 @@ class RxSessionPtr;
 class RxSession : public TransportSession
 {
 friend RxSessionPtr;
+friend bool can_library_init(const LibraryConfig&);
+friend bool can_library_release();
+
   RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
                               const std::string& bus_name, const CanPacket& packet);
 
@@ -46,6 +49,8 @@ public:
           void operator delete  ( void* ptr );
 
 private:
+  static allocator<RxSession>*    _allocator;
+
   std::array<bool,MAX_TP_PACKETS> _received_map;
   uint8_t                         _max_packets;
 

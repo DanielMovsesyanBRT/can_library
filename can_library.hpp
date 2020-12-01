@@ -74,7 +74,11 @@ private:
   Callback*                       _cback;
 };
 
-CanInterface* create_can_interface(CanInterface::Callback*,const LibraryConfig& cfg = LibraryConfig());
+bool can_library_init(const LibraryConfig& cfg = LibraryConfig());
+bool can_library_release();
+
+CanInterface* create_can_interface(CanInterface::Callback*);
+void delete_can_interface(CanInterface*);
 
 } // can
 } // brt

@@ -334,7 +334,7 @@ class allocator
 {
   struct filler
   {
-    filler() : _empty(true), _allocator(nullptr), _keyword(typeid(_Type).hash_code()) 
+    filler() : _empty(true), _allocator(nullptr), _keyword(typeid(allocator<_Type,_Extrasize>).hash_code()) 
     { }
 
     uint8_t   _v[sizeof(_Type) + _Extrasize]   __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
@@ -363,7 +363,7 @@ public:
     delete[] _buffer;
   }
 
-  void*  allocate()
+  void* allocate()
   {
     for (size_t index = 0; index < _pool_size; index++)
     {
@@ -377,7 +377,7 @@ public:
   static bool free(void* ptr)
   {
     filler* fl = reinterpret_cast<filler*>(ptr);
-    if (fl->_keyword != typeid(_Type).hash_code())
+    if (fl->_keyword != typeid(allocator<_Type,_Extrasize>).hash_code())
       return false;
 
     fl->_empty.store(true);

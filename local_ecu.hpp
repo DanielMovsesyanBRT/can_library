@@ -31,6 +31,9 @@ public:
 friend CanProcessor;
 friend CanDeviceDatabase;
 friend LocalECUPtr;
+friend bool can_library_init(const LibraryConfig&);
+friend bool can_library_release();
+
   /**
    * \enum ECUStatus
    *
@@ -54,6 +57,7 @@ private:
           bool                    send_message(CanMessagePtr message,RemoteECUPtr remote,const std::string& bus_name);
 
 private:
+  static  allocator<LocalECU>*    _allocator;
   Mutex                           _mutex;
   /**
    * \struct Queue

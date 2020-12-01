@@ -13,6 +13,7 @@
 namespace brt {
 namespace can {
 
+allocator<RemoteECU>* RemoteECU::_allocator = nullptr;
 /**
  * \fn  constructor RemoteECU::RemoteECU
  *
@@ -42,7 +43,10 @@ RemoteECU::~RemoteECU()
  */
 void RemoteECU::operator delete  ( void* ptr )
 { 
-  if (!allocator<RemoteECU>::free(ptr))
+  if (_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+
+  if (!_allocator->free(ptr))
     ::free(ptr);
 }
 
@@ -54,7 +58,10 @@ void RemoteECU::operator delete  ( void* ptr )
  */
 RemoteECUPtr::RemoteECUPtr(CanProcessor* processor,const CanName& name /*= CanName()*/)
 {
-  RemoteECU* ecu = reinterpret_cast<RemoteECU*>(processor->cfg().remote_ecu_allocator().allocate());
+  if (RemoteECU::_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+
+  RemoteECU* ecu = reinterpret_cast<RemoteECU*>(RemoteECU::_allocator->allocate());
   if (ecu == nullptr)
     ecu = reinterpret_cast<RemoteECU*>(::malloc(sizeof(RemoteECU)));
 

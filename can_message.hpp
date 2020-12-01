@@ -123,6 +123,9 @@ class CanMessagePtr;
 class CanMessage : public shared_class<CanMessage>
 {
 friend CanMessagePtr;
+friend bool can_library_init(const LibraryConfig&);
+friend bool can_library_release();
+
 public:
   typedef std::function<void(uint64_t,const std::string&,bool)>   ConfirmationCallback;
 
@@ -168,6 +171,10 @@ public:
           void operator delete(void*);
 
 private:
+  static  allocator<CanMessage,255*7>*    _big_msg_allocator;
+  static  allocator<CanMessage,8>*        _small_msg_allocator;
+
+private:
   uint32_t                        _pgn;
   uint8_t                         _priority;
   ConfirmationCallback            _cback;
@@ -192,13 +199,13 @@ friend class CanMessage;
 public:
   CanMessagePtr() {}
 
-  explicit CanMessagePtr(CanInterface*, const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+  explicit CanMessagePtr(const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
-  explicit CanMessagePtr(CanInterface*, const uint8_t* data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+  explicit CanMessagePtr(const uint8_t* data,uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
-  explicit CanMessagePtr(CanInterface*, uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+  explicit CanMessagePtr(uint32_t length, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 
 };

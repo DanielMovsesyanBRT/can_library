@@ -23,6 +23,8 @@ class TxSessionPtr;
 class TxSession : public TransportSession
 {
 friend TxSessionPtr;
+friend bool can_library_init(const LibraryConfig&);
+friend bool can_library_release();
 
   TxSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr source,CanECUPtr destination,const std::string& bus_name)
   : TransportSession(processor, mutex, message,  source, destination, bus_name)
@@ -49,6 +51,8 @@ public:
           void operator delete  ( void* ptr );
 
 private:
+  static allocator<TxSession>*    _allocator;
+
   enum TxStates
   {
     SendBAM,

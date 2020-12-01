@@ -9,6 +9,8 @@
 namespace brt {
 namespace can {
 
+allocator<RxSession>* RxSession::_allocator = nullptr;
+
 /**
  * \fn  constructor RxSession::RxSession
  *
@@ -31,7 +33,7 @@ RxSession::RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,Can
 {
   uint32_t pgn  = packet.data()[5] | (packet.data()[6] << 8) | (packet.data()[7] << 16);
   uint32_t size = packet.data()[1] | (packet.data()[2] << 8);
-  _message = CanMessagePtr(processor, size, pgn);
+  _message = CanMessagePtr(size, pgn);
 
   _max_packets = packet.data()[4];
   if (_max_packets == 0xFF)
@@ -175,7 +177,7 @@ bool RxSession::send_cts()
   if (_range.second > num_sequences)
     _range.second = num_sequences;
 
-  CanMessagePtr msg( processor(), 
+  CanMessagePtr msg(
   {
     static_cast<uint8_t>(CTS), 
     max_packets,
@@ -199,7 +201,7 @@ bool RxSession::send_eom()
   uint32_t total_size = message()->length();
   uint8_t num_packets = static_cast<uint8_t>((total_size - 1) / 7 + 1);
 
-  CanMessagePtr msg( processor(), 
+  CanMessagePtr msg(
     {
       static_cast<uint8_t>(EOM), 
       static_cast<uint8_t>(total_size & 0xFF),
@@ -233,7 +235,10 @@ void RxSession::message_complete()
  */
 void RxSession::operator delete  ( void* ptr )
 {
-  if (!allocator<RxSession>::free(ptr))
+  if (_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+
+  if (!_allocator->free(ptr))
     ::free(ptr); 
 }
 
@@ -250,7 +255,10 @@ void RxSession::operator delete  ( void* ptr )
 RxSessionPtr::RxSessionPtr(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
                               const std::string& bus_name, const CanPacket& packet)
 {
-  RxSession* session = reinterpret_cast<RxSession*>(processor->cfg().rx_tpsessions_allocator().allocate());
+  if (RxSession::_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+
+  RxSession* session = reinterpret_cast<RxSession*>(RxSession::_allocator->allocate());
   if (session == nullptr)
     session = reinterpret_cast<RxSession*>(::malloc(sizeof(RxSession)));
 

@@ -14,6 +14,9 @@
 namespace brt {
 namespace can {
 
+allocator<LocalECU>* LocalECU::_allocator = nullptr;
+
+
 /**
  * \fn  constructor LocalECU::LocalECU
  *
@@ -180,7 +183,10 @@ void LocalECU::disable_device(const std::string& bus)
  */
 void LocalECU::operator delete  ( void* ptr )
 {
-  if (!allocator<LocalECU>::free(ptr))
+  if (_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+
+  if (!_allocator->free(ptr))
     ::free(ptr);
 }
 
@@ -192,7 +198,10 @@ void LocalECU::operator delete  ( void* ptr )
  */
 LocalECUPtr::LocalECUPtr(CanProcessor* processor,const CanName& name /*= CanName()*/)
 {
-  LocalECU* ecu = reinterpret_cast<LocalECU*>(processor->cfg().local_ecu_allocator().allocate());
+  if (LocalECU::_allocator == nullptr)
+    throw std::runtime_error("Library is not properly initialized");
+  
+  LocalECU* ecu = reinterpret_cast<LocalECU*>(LocalECU::_allocator->allocate());
   if (ecu == nullptr)
     ecu = reinterpret_cast<LocalECU*>(::malloc(sizeof(LocalECU)));
 
