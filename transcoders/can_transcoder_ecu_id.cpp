@@ -38,16 +38,19 @@ CanTranscoderEcuId::~CanTranscoderEcuId()
 }
 
 /**
- * \fn  CanTranscoderEcuId::Decoder::decode
+ * \fn  CanTranscoderEcuId::Decoder::on_decode
  *
- * @return  shared_pointer<CanTranscoder>
+ * @param  tcoder : CanTranscoder* 
  */
-shared_pointer<CanTranscoder> CanTranscoderEcuId::Decoder::decode()
+void CanTranscoderEcuId::Decoder::on_decode(CanTranscoder* tcoder)
 {
+  CanTranscoderEcuId* eid = dynamic_cast<CanTranscoderEcuId*>(tcoder);
+  if (eid == nullptr)
+    throw std::runtime_error("Invaliid transcoder casting");
+
   const char* ptr = reinterpret_cast<const char*>(msg()->data());
   const char* end = reinterpret_cast<const char*>(msg()->data() + msg()->length());
 
-  CanTranscoderEcuId* eid = new CanTranscoderEcuId();
   size_t str_index = 0;
   size_t field_index = 0;
 
@@ -97,8 +100,6 @@ shared_pointer<CanTranscoder> CanTranscoderEcuId::Decoder::decode()
     
     ptr++;
   }
-
-  return shared_pointer<CanTranscoder>(eid);
 }
 
 

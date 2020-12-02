@@ -34,17 +34,19 @@ CanTranscoderSoftwareId::~CanTranscoderSoftwareId()
 }
 
 /**
- * \fn  CanTranscoderSoftwareId::Decoder::decode
+ * \fn  CanTranscoderSoftwareId::Decoder::on_decode
  *
- * @return  shared_pointer<CanTranscoder
+ * @param  tcoder : CanTranscoder* 
  */
-shared_pointer<CanTranscoder> CanTranscoderSoftwareId::Decoder::decode()
+void CanTranscoderSoftwareId::Decoder::on_decode(CanTranscoder* tcoder)
 {
   if (msg()->length() <= 1)
-    return shared_pointer<CanTranscoder>();
+    return;
 
-  CanTranscoderSoftwareId* sid = new CanTranscoderSoftwareId();
-  
+  CanTranscoderSoftwareId* sid = dynamic_cast<CanTranscoderSoftwareId*>(tcoder);
+  if (sid == nullptr)
+    throw std::runtime_error("Invaliid transcoder casting");
+
   sid->_num_cfs = std::min(msg()->data()[0], static_cast<uint8_t>(MAX_SID_DESIGNATORS));
   const char* ptr = reinterpret_cast<const char*>(&msg()->data()[1]);
   const char* end = reinterpret_cast<const char*>(msg()->data() + msg()->length());
@@ -80,8 +82,6 @@ shared_pointer<CanTranscoder> CanTranscoderSoftwareId::Decoder::decode()
       sid->_sid[index]._num_modules++;
     }
   }
-
-  return shared_pointer<CanTranscoder>(sid);
 }
 
 

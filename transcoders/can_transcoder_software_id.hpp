@@ -26,9 +26,12 @@ class CanTranscoderSoftwareId : public CanTranscoder
 friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
-public:
   CanTranscoderSoftwareId();
+
+public:
   virtual ~CanTranscoderSoftwareId();
+
+  virtual uint32_t                pgn() const { return PGN_SoftwareID; }
 
   /**
    * \class Decoder
@@ -40,7 +43,10 @@ public:
   {
   public:
     Decoder(const CanMessagePtr& msg) : CanTranscoder::Decoder(msg) {}
-    virtual shared_pointer<CanTranscoder> decode();
+
+  protected:
+    virtual CanTranscoder*          create() { return new CanTranscoderSoftwareId(); }
+    virtual void                    on_decode(CanTranscoder*);
   };
 
   struct ControlFunction

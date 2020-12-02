@@ -25,9 +25,12 @@ class CanTranscoderEcuId : public CanTranscoder
 friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
-public:
   CanTranscoderEcuId();
+
+public:
   virtual ~CanTranscoderEcuId();
+
+  virtual uint32_t                pgn() const { return PGN_ECUID; }
 
   /**
    * \class Decoder
@@ -39,7 +42,10 @@ public:
   {
   public:
     Decoder(const CanMessagePtr& msg) : CanTranscoder::Decoder(msg) {}
-    virtual shared_pointer<CanTranscoder> decode();
+
+  protected:
+    virtual CanTranscoder*          create() { return new CanTranscoderEcuId(); }
+    virtual void                    on_decode(CanTranscoder*);
   };
 
           const char*             ecu_part_number() const { return _ecu_part_number; }

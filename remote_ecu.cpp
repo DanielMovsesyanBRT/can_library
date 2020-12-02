@@ -10,6 +10,7 @@
 #include "can_constants.hpp" 
 #include "can_processor.hpp" 
 
+#include "transcoders/can_transcoder_ack.hpp"
 #include "transcoders/can_transcoder_ecu_id.hpp"
 #include "transcoders/can_transcoder_software_id.hpp"
 
@@ -65,7 +66,11 @@ void RemoteECU::operator delete  ( void* ptr )
  */
 bool RemoteECU::on_message_received(const CanMessagePtr& msg)
 {
-  switch(msg->pgn())
+  uint32_t pgn = msg->pgn();
+  if (pgn == PGN_AckNack)
+    pgn = CanTranscoderAck(msg).pgn();
+
+  switch(pgn)
   {
   case PGN_SoftwareID:
     _sid = CanTranscoderSoftwareId::Decoder(msg).decode();
