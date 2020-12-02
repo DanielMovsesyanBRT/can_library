@@ -87,9 +87,9 @@ public:
 
           void                    message_received(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,const std::string& bus_name);
 
-  virtual LocalECUPtr             create_local_ecu(const CanName& name,
-                                            uint8_t desired_address = BROADCATS_CAN_ADDRESS,
-                                            const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+  virtual LocalECUPtr             create_local_ecu(const CanName& name);
+          bool                    activate_local_ecu(const LocalECUPtr&, const std::string& bus_name, uint8_t desired_address = BROADCATS_CAN_ADDRESS);
+
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus);
 
   virtual bool                    destroy_local_ecu(const LocalECUPtr&);

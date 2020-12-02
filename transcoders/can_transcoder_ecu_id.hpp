@@ -18,7 +18,6 @@ namespace can {
 /**
  * \class CanTranscoderEcuId
  *
- * \brief <description goes here>
  */
 class CanTranscoderEcuId : public CanTranscoder
 {
@@ -26,27 +25,11 @@ friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
   CanTranscoderEcuId();
-
 public:
   virtual ~CanTranscoderEcuId();
 
+  virtual CanMessagePtr           encode() const;
   virtual uint32_t                pgn() const { return PGN_ECUID; }
-
-  /**
-   * \class Decoder
-   *
-   * Inherited from :
-   *             CanTranscoder :: Decoder 
-   */
-  class Decoder : public CanTranscoder::Decoder
-  {
-  public:
-    Decoder(const CanMessagePtr& msg) : CanTranscoder::Decoder(msg) {}
-
-  protected:
-    virtual CanTranscoder*          create() { return new CanTranscoderEcuId(); }
-    virtual void                    on_decode(CanTranscoder*);
-  };
 
           const char*             ecu_part_number() const { return _ecu_part_number; }
           const char*             ecu_serial_number() const { return _ecu_serial_number; }
@@ -76,6 +59,45 @@ public:
               ::free(ptr);
           }
 
+
+  /**
+   * \class Decoder
+   *
+   * Inherited from :
+   *             CanTranscoder :: Decoder 
+   */
+  class Decoder : public CanTranscoder::Decoder
+  {
+  public:
+    Decoder(const CanMessagePtr& msg) : CanTranscoder::Decoder(msg) {}
+
+  protected:
+    virtual CanTranscoder*          create() { return new CanTranscoderEcuId(); }
+    virtual void                    on_decode(CanTranscoder*);
+  };
+
+  /**
+   * \class Builder
+   *
+   */
+  class Builder 
+  {
+  public:
+    Builder();
+    ~Builder() {}
+
+            Builder&                set_part_number(const std::string&);
+            Builder&                set_serial_number(const std::string&);
+            Builder&                set_ecu_location(const std::string&);
+            Builder&                set_ecu_type(const std::string&);
+            Builder&                set_ecu_mf_name(const std::string&);
+            Builder&                set_ecu_hardware_id(const std::string&);
+
+            shared_pointer<CanTranscoderEcuId> build() { return _eid; }        
+
+  private:
+    shared_pointer<CanTranscoderEcuId> _eid;
+  };
 
 private:
   static  allocator<CanTranscoderEcuId>*  _allocator;

@@ -7,6 +7,7 @@
  */
     
 #include "can_transcoder_ecu_id.hpp"  
+#include "can_transport_defines.hpp"
 
 namespace brt {
 namespace can {
@@ -35,6 +36,35 @@ CanTranscoderEcuId::CanTranscoderEcuId()
 CanTranscoderEcuId::~CanTranscoderEcuId()
 {
 
+}
+
+/**
+ * \fn  CanTranscoderEcuId::encode
+ *
+ * @return  CanMessagePtr
+ */
+CanMessagePtr CanTranscoderEcuId::encode() const
+{
+  uint8_t  data_bytes[MAX_TP_DATA_SIZE];
+  uint8_t *ptr = data_bytes, *end = ptr + MAX_TP_DATA_SIZE;
+
+  auto fn=[&ptr,end](const char* value)
+  {
+    while (*value != '\0' && (ptr < end))
+      *ptr++ = static_cast<uint8_t>(*value++);
+    
+    if (ptr < end)
+      *ptr++ = '*';
+  };
+
+  fn(_ecu_part_number);
+  fn(_ecu_serial_number);
+  fn(_ecu_location);
+  fn(_ecu_type);
+  fn(_ecu_mf_name);
+  fn(_ecu_hardware_id);
+
+  return CanMessagePtr(data_bytes, ptr - data_bytes, PGN_ECUID);
 }
 
 /**
@@ -100,6 +130,88 @@ void CanTranscoderEcuId::Decoder::on_decode(CanTranscoder* tcoder)
     
     ptr++;
   }
+}
+
+
+/**
+ * \fn  constructor CanTranscoderEcuId::Builder::Builder
+ *
+ */
+CanTranscoderEcuId::Builder::Builder()
+{
+  _eid.reset(new CanTranscoderEcuId);
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_part_number
+ *
+ * @param  & pn : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_part_number(const std::string& pn)
+{
+  strncpy(_eid->_ecu_part_number, pn.c_str(), sizeof(_eid->_ecu_part_number) - 1);
+  return *this;
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_serial_number
+ *
+ * @param  & sn : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_serial_number(const std::string& sn)
+{
+  strncpy(_eid->_ecu_serial_number, sn.c_str(), sizeof(_eid->_ecu_serial_number) - 1);
+  return *this;
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_ecu_location
+ *
+ * @param  & ecu_location : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_ecu_location(const std::string& ecu_location)
+{
+  strncpy(_eid->_ecu_location, ecu_location.c_str(), sizeof(_eid->_ecu_location) - 1);
+  return *this;
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_ecu_type
+ *
+ * @param  & ecu_type : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_ecu_type(const std::string& ecu_type)
+{
+  strncpy(_eid->_ecu_type, ecu_type.c_str(), sizeof(_eid->_ecu_type) - 1);
+  return *this;
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_ecu_mf_name
+ *
+ * @param  & mf_name : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_ecu_mf_name(const std::string& mf_name)
+{
+  strncpy(_eid->_ecu_mf_name, mf_name.c_str(), sizeof(_eid->_ecu_mf_name) - 1);
+  return *this;
+}
+
+/**
+ * \fn  CanTranscoderEcuId::Builder::set_ecu_hardware_id
+ *
+ * @param  & hw_id : const std::string
+ * @return  CanTranscoderEcuId::Builder
+ */
+CanTranscoderEcuId::Builder& CanTranscoderEcuId::Builder::set_ecu_hardware_id(const std::string& hw_id)
+{
+  strncpy(_eid->_ecu_hardware_id, hw_id.c_str(), sizeof(_eid->_ecu_hardware_id) - 1);
+  return *this;
 }
 
 

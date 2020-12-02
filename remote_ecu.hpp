@@ -58,10 +58,6 @@ private:
 
 
   static  allocator<RemoteECU>*   _allocator;
-  
-  shared_pointer<CanTranscoder>   _sid;
-  shared_pointer<CanTranscoder>   _eid;
-
   mutable RecoursiveMutex         _mutex;
   
   // status

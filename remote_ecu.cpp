@@ -70,14 +70,15 @@ bool RemoteECU::on_message_received(const CanMessagePtr& msg)
   if (pgn == PGN_AckNack)
     pgn = CanTranscoderAck(msg).pgn();
 
+  std::lock_guard<RecoursiveMutex> l(_mutex);
   switch(pgn)
   {
   case PGN_SoftwareID:
-    _sid = CanTranscoderSoftwareId::Decoder(msg).decode();
+    set_pgn_transcoder(CanTranscoderSoftwareId::Decoder(msg).decode());
     break;
 
   case PGN_ECUID:
-    _eid = CanTranscoderEcuId::Decoder(msg).decode();
+    set_pgn_transcoder(CanTranscoderEcuId::Decoder(msg).decode());
     break;
 
   default:
@@ -95,13 +96,12 @@ bool RemoteECU::on_message_received(const CanMessagePtr& msg)
  */
 shared_pointer<CanTranscoder> RemoteECU::get_requested_pgn(uint32_t pgn) const
 {
+  std::lock_guard<RecoursiveMutex> l(_mutex);
   switch(pgn)
   {
   case PGN_SoftwareID:
-    return _sid;
-
   case PGN_ECUID:
-    return _eid;
+    return get_pgn_transcoder(pgn);
 
   default:
     break;

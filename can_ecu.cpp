@@ -45,5 +45,46 @@ uint8_t CanECU::get_address(const std::string& bus_name) const
   return _processor->device_db().get_ecu_address(name(), bus_name);
 }
 
+/**
+ * \fn  CanECU::set_pgn_transcoder
+ *
+ * @param  tcoder : const CanTranscoderPtr& 
+ * @return  bool
+ */
+bool CanECU::set_pgn_transcoder(const CanTranscoderPtr& tcoder)
+{
+  auto iter = _trans_map.find_if([tcoder](const CanTranscoderPtr& __t)->bool
+  {
+    return (__t && (__t->pgn() == tcoder->pgn()));
+  });
+
+  if (iter != _trans_map.end())
+    *iter = tcoder;
+  else if (_trans_map.push(tcoder) == _trans_map.end())
+    return false;
+
+  return true;
+}
+
+/**
+ * \fn  CanECU::get_pgn_transcoder
+ *
+ * @param  pgn : uint32_t 
+ * @return  CanTranscoderPtr
+ */
+CanTranscoderPtr CanECU::get_pgn_transcoder(uint32_t pgn) const
+{
+  auto iter = _trans_map.find_if([pgn](const CanTranscoderPtr& __t)->bool
+  {
+    return (__t && (__t->pgn() == pgn));
+  });
+
+  if (iter == _trans_map.end())
+    return CanTranscoderPtr();
+  
+  return (*iter);
+}
+
+
 } // can
 } // brt

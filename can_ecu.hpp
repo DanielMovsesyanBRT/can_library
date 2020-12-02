@@ -10,6 +10,7 @@
 
 #include "can_name.hpp"
 #include "can_utils.hpp"
+#include "can_transcoder.hpp"
 
 namespace brt {
 namespace can {
@@ -31,9 +32,16 @@ public:
 
 protected:
           CanProcessor*           processor() { return _processor; }
+          
+          bool                    set_pgn_transcoder(const CanTranscoderPtr&);
+          CanTranscoderPtr        get_pgn_transcoder(uint32_t pgn) const;
 private:
   CanProcessor*                   _processor;
   CanName                         _name;
+
+private:
+
+  fixed_list<CanTranscoderPtr,6>  _trans_map;
 };
 
 typedef shared_pointer<CanECU>   CanECUPtr;

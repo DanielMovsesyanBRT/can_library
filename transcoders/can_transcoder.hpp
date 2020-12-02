@@ -26,6 +26,8 @@ public:
   virtual ~CanTranscoder();
 
           bool                    is_supported() const { return !_not_supported; }
+
+  virtual CanMessagePtr           encode() const = 0;
   virtual uint32_t                pgn() const = 0;
   /**
    * \class Decoder
@@ -50,10 +52,9 @@ public:
 
 private:
   bool                            _not_supported;  
- 
 };
 
-
+typedef shared_pointer<CanTranscoder> CanTranscoderPtr;
 } // can
 } // brt
 

@@ -22,15 +22,11 @@ allocator<LocalECU>* LocalECU::_allocator = nullptr;
  *
  * @param  processor : CanProcessor* 
  * @param  name : const CanName& 
- * @param  buses :  const std::initializer_list<std::string>& 
  */
-LocalECU::LocalECU(CanProcessor* processor,const CanName& name, const std::string* buses, size_t num_buses)
+LocalECU::LocalECU(CanProcessor* processor,const CanName& name)
 : CanECU(processor,name)
 , _mutex(processor)
 {
-  for (size_t index = 0; index < num_buses; index++)
-    _container_map.insert(ContainerMap::value_type(buses[index], Container()));
-
 }
 
 /**
@@ -119,7 +115,7 @@ bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& rem
     if (container == _container_map.end())
       return false;
 
-    if (container->second._status == eInavtive)
+    if (container->second._status == eInactive)
       return false;
 
     if (container->second._status == eWaiting)
@@ -170,7 +166,7 @@ void LocalECU::disable_device(const std::string& bus)
   std::lock_guard<Mutex> l(_mutex);
   auto stat = _container_map.find(bus);
   if (stat != _container_map.end())
-    stat->second._status = eInavtive;
+    stat->second._status = eInactive;
 }
 
 /**
@@ -188,6 +184,78 @@ void LocalECU::operator delete  ( void* ptr )
     ::free(ptr);
 }
 
+/**
+ * \fn  LocalECU::set_transcoder
+ *
+ * @param  tcoder : const CanTranscoderPtr& 
+ * @return  bool
+ */
+bool LocalECU::set_transcoder(const CanTranscoderPtr& tcoder)
+{
+  switch (tcoder->pgn())
+  {
+  case PGN_SoftwareID:
+  case PGN_ECUID:
+  case PGN_DiagnosticProtocol:
+    break;
+
+  default:
+    return false;
+  }
+
+  std::lock_guard<Mutex> l(_mutex);
+  return set_pgn_transcoder(tcoder);
+}
+
+/**
+ * \fn  LocalECU::request_pgn
+ *
+ * @param  pgn : uint32_t 
+ * @return  CanMessagePtr
+ */
+CanMessagePtr LocalECU::request_pgn(uint32_t pgn)
+{
+  std::lock_guard<Mutex> l(_mutex);
+  CanTranscoderPtr tc = get_pgn_transcoder(pgn);
+  if (!tc)
+    return CanMessagePtr();
+
+  return tc->encode();
+}
+
+/**
+ * \fn  LocalECU::activate
+ *
+ * @param  desired_address : uint8_t 
+ * @param  buses :  const std::initializer_list<std::string>&
+ */
+void LocalECU::activate(uint8_t desired_address, const std::initializer_list<std::string>& buses
+                                                      /* = std::initializer_list<std::string>() */)
+{
+  fixed_list<std::string,10>  bus_list(buses);
+  if (bus_list.empty())
+    processor()->get_all_buses(bus_list);
+
+  for (auto bus : bus_list)
+  {
+    std::lock_guard<Mutex> l(_mutex);
+    auto iter = _container_map.find(bus);
+    if (iter == _container_map.end())
+    {
+      auto res = _container_map.insert(ContainerMap::value_type(bus,Container()));
+      if (!res.second)
+        continue;
+
+      iter = res.first;
+    }
+
+    if (iter->second._status != eInactive)
+      continue;
+
+    if (processor()->activate_local_ecu(LocalECUPtr(getptr()), bus, desired_address))
+      iter->second._status = eWaiting;
+  }
+}
 
 } // can
 } // brt

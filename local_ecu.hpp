@@ -12,6 +12,7 @@
 #include "remote_ecu.hpp"
 #include "can_message.hpp"
 #include "can_utils.hpp"
+#include "can_transcoder.hpp"
 
 #include <deque>
 #include <unordered_map>
@@ -40,8 +41,7 @@ friend bool can_library_release();
    */
   enum ECUStatus
   {
-    eInitialized,
-    eInavtive,
+    eInactive,
     eWaiting,
     eActive
   };
@@ -50,12 +50,17 @@ friend bool can_library_release();
 
           void operator delete  ( void* ptr );
 
+          bool                    set_transcoder(const CanTranscoderPtr&);
+          void                    activate(uint8_t desired_address, 
+                                      const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+
 private:
-  LocalECU(CanProcessor*,const CanName& name, const std::string* buses, size_t num_buses);
+  LocalECU(CanProcessor*,const CanName& name);
           void                    claim_address(uint8_t address,const std::string& bus_name);
           void                    disable_device(const std::string& bus_name);
 
           bool                    send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,const std::string& bus_name);
+          CanMessagePtr           request_pgn(uint32_t pgn);
 
 private:
   static  allocator<LocalECU>*    _allocator;
@@ -81,7 +86,7 @@ private:
 
   struct Container
   {
-    Container() : _status(eWaiting), _time_tag(0ULL) {}
+    Container() : _status(eInactive), _time_tag(0ULL) {}
     ECUStatus                       _status;
     uint64_t                        _time_tag;
     fifo<Queue>                     _fifo;
@@ -104,22 +109,16 @@ class LocalECUPtr : public shared_pointer<LocalECU>
 public:
   LocalECUPtr() {}
   
-  template<size_t _Size>
-  explicit LocalECUPtr(CanProcessor* processor,const CanName& name, const fixed_list<std::string,_Size>& buses)
+  explicit LocalECUPtr(CanProcessor* processor,const CanName& name)
   {
     if (LocalECU::_allocator == nullptr)
       throw std::runtime_error("Library is not properly initialized");
   
-    std::string bus_array[_Size];
-    size_t num_buses = 0;
-    for (auto iter = buses.begin(); ((iter != buses.end()) && (num_buses < _Size)); ++iter)
-      bus_array[num_buses++] = (*iter);
-
     LocalECU* ecu = reinterpret_cast<LocalECU*>(LocalECU::_allocator->allocate());
     if (ecu == nullptr)
       ecu = reinterpret_cast<LocalECU*>(::malloc(sizeof(LocalECU)));
 
-    ::new (ecu) LocalECU(processor,name,bus_array,num_buses);
+    ::new (ecu) LocalECU(processor,name);
     reset(ecu);
   }
 

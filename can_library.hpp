@@ -50,10 +50,7 @@ public:
 
   virtual bool                    register_can_bus(const std::string& bus) = 0;
   virtual void                    update() = 0;
-  virtual LocalECUPtr             create_local_ecu(const CanName& name,
-                                            uint8_t desired_address = BROADCATS_CAN_ADDRESS,
-                                            const std::initializer_list<std::string>& buses = std::initializer_list<std::string>()) = 0;
-
+  virtual LocalECUPtr             create_local_ecu(const CanName& name) = 0;
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus) = 0;
 
   virtual bool                    destroy_local_ecu(const LocalECUPtr&) = 0;

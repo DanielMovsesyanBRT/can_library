@@ -14,6 +14,7 @@ set(SOURCES
     local_ecu.cpp
     remote_ecu.cpp
     transcoders/can_transcoder_ack.cpp
+    transcoders/can_transcoder_diag_prot.cpp
     transcoders/can_transcoder_ecu_id.cpp
     transcoders/can_transcoder_software_id.cpp
     transcoders/can_transcoder.cpp

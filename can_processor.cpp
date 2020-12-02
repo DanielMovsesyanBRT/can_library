@@ -8,6 +8,7 @@
     
 #include "can_processor.hpp"  
 #include "can_transport_protocol.hpp"
+#include "can_transcoder_ack.hpp"
 
 #include <mutex>
 
@@ -165,8 +166,9 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
   if (packet.dlc() < 3)
     return;
   
+  uint32_t pgn = can_unpack24(packet.data());
   // Requested Address Claimed
-  if (can_unpack24(packet.data()) == PGN_AddressClaimed)
+  if (pgn == PGN_AddressClaimed)
   {
     if (packet.is_broadcast())
     {
@@ -187,9 +189,38 @@ void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_nam
   }
   else
   {
-    // todo:
-  }
+    RemoteECUPtr remote(_device_db.get_ecu_by_address(packet.sa(), bus_name));
+    if (!remote)
+      remote = register_abstract_remote_ecu(packet.sa(), bus_name);
+    
+    if (!remote)
+      return; // 
 
+    if (packet.is_broadcast())
+    {
+      fixed_list<LocalECUPtr> ecus;
+      _device_db.get_local_ecus(ecus, { bus_name });
+      for (auto local : ecus)
+      {
+        CanMessagePtr msg = local->request_pgn(pgn);
+        if (msg)
+          send_can_message(msg, local, remote, { bus_name });
+      }
+    }
+    else
+    {
+      LocalECUPtr local(_device_db.get_ecu_by_address(packet.da(), bus_name));
+      if (!local)
+        return;
+      
+      CanMessagePtr msg = local->request_pgn(pgn);
+      if (!msg)
+        msg = CanTranscoderAck(CanTranscoderAck::Nack, packet.sa(), pgn).create_message();
+
+        if (msg)
+          send_can_message(msg, local, remote, { bus_name });
+    }
+  }
 }
 
 /**
@@ -212,49 +243,37 @@ CanBusStatus CanProcessor::get_bus_status(const std::string& bus) const
  * \fn  CanProcessor::create_local_ecu
  *
  * @param  name : const CanName& 
- * @param  desired_address  :  uint8_t 
- * @param  desired_buses :  const std::initializer_list<std::string>&
  * @return  LocalECUPtr
  */
-LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
-                                            uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/,
-                                            const std::initializer_list<std::string>& desired_buses /*= std::initializer_list<std::string>()*/)
+LocalECUPtr CanProcessor::create_local_ecu(const CanName& name)
 {
   CanECUPtr ecu = _device_db.get_ecu_by_name(name,"");
   if (ecu)
     return LocalECUPtr(ecu);
 
-  bool result = false;
+  return LocalECUPtr(this, name);
+}
 
-  fixed_list<std::string,100> buses(desired_buses);
-
-  if (buses.empty())
-    get_all_buses(buses);
-  
-  LocalECUPtr local(this, name, buses);
-  for (auto bus : buses)
+/**
+ * \fn  CanProcessor::activate_local_ecu
+ *
+ * @param  ecu : const LocalECUPtr& 
+ * @param  bus_name :  const std::string&
+ * @param  desired_address : uint8_t 
+ * @return  bool
+ */
+bool CanProcessor::activate_local_ecu(const LocalECUPtr& ecu, const std::string& bus_name,
+                        uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/)
+{
   {
-    {
-      std::lock_guard<RecoursiveMutex> l(_mutex);
-      if (_bus_map.find(bus) == _bus_map.end())
-        continue;
-    }
-
-    if (!_device_db.add_local_ecu(local, bus, desired_address))
-    {
-      // Unable to register device on the Bus
-      // So we are going to disable it
-      local->disable_device(bus);
-    }
-    else
-      result = true;
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    if (_bus_map.find(bus_name) == _bus_map.end())
+      return false;
   }
 
-  if (!result)
-    return LocalECUPtr();
-
-  return local;
+  return _device_db.add_local_ecu(ecu, bus_name, desired_address);
 }
+
 
 /**
  * \fn  CanProcessor::register_abstract_remote_ecu

@@ -100,6 +100,8 @@ void RecoursiveMutex::unlock()
 }
 
 
+const char ConstantString::_empty_string[3] = "";
+
 
 } // can
 } // brt

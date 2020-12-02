@@ -33,8 +33,7 @@ struct LibraryConfig
   , _small_messages_pool_size(1024)
   , _tx_tpsessions_pool_size(32)
   , _rx_tpsessions_pool_size(32)
-  , _sid_transcoder_pool_size(32)
-  , _eid_transcoder_pool_size(32)
+  , _transcoder_pool_size(32)
   {  }
 
   size_t                          _local_ecu_pool_size;
@@ -44,8 +43,7 @@ struct LibraryConfig
   size_t                          _tx_tpsessions_pool_size;
   size_t                          _rx_tpsessions_pool_size;
 
-  size_t                          _sid_transcoder_pool_size;
-  size_t                          _eid_transcoder_pool_size;
+  size_t                          _transcoder_pool_size;
 };
 
 /**
@@ -591,6 +589,37 @@ public:
 private:
   std::atomic_uint32_t            _lock_counter;
   std::atomic_uint32_t            _thread_id;
+};
+
+/**
+ * \class ConstantString
+ *
+ */
+class ConstantString
+{
+public:
+  explicit ConstantString(const char* str)
+  : _string((str == nullptr) ? _empty_string : str)
+  , _size(0)
+  {
+    const char* ptr = _string;
+    while (*ptr++ != '\0')
+      _size++;
+  }
+
+  ~ConstantString() {}
+
+  ConstantString(const ConstantString&) = delete;
+  ConstantString& operator=(const ConstantString&) = delete;
+
+          const char*             c_str() const { return _string; } 
+          size_t                  size() const { return _size; }
+          bool                    empty() const { return _size == 0; }
+          
+private:
+  static const char               _empty_string[3];
+  const char*                     _string;
+  size_t                          _size;
 };
 
 
