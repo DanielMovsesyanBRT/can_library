@@ -26,16 +26,16 @@ public:
   virtual ~CanTranscoder();
 
   /**
-   * \class Encoder
+   * \class Decoder
    *
    */
-  class Encoder
+  class Decoder
   {
   public:
-    Encoder(const CanMessagePtr& msg) : _msg(msg) {}
-    virtual ~Encoder() {}
+    Decoder(const CanMessagePtr& msg) : _msg(msg) {}
+    virtual ~Decoder() {}
 
-    virtual shared_pointer<CanTranscoder> encode() = 0;
+    virtual shared_pointer<CanTranscoder> decode() = 0;
     const CanMessagePtr&            msg() const { return _msg; }
   private:
     CanMessagePtr                   _msg;

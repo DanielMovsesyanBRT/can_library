@@ -30,16 +30,16 @@ public:
   virtual ~CanTranscoderEcuId();
 
   /**
-   * \class Encoder
+   * \class Decoder
    *
    * Inherited from :
-   *             CanTranscoder :: Encoder 
+   *             CanTranscoder :: Decoder 
    */
-  class Encoder : public CanTranscoder::Encoder
+  class Decoder : public CanTranscoder::Decoder
   {
   public:
-    Encoder(const CanMessagePtr& msg) : CanTranscoder::Encoder(msg) {}
-    virtual shared_pointer<CanTranscoder> encode();
+    Decoder(const CanMessagePtr& msg) : CanTranscoder::Decoder(msg) {}
+    virtual shared_pointer<CanTranscoder> decode();
   };
 
           const char*             ecu_part_number() const { return _ecu_part_number; }

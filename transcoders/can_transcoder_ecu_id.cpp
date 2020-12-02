@@ -38,11 +38,11 @@ CanTranscoderEcuId::~CanTranscoderEcuId()
 }
 
 /**
- * \fn  CanTranscoderEcuId::Encoder::encode
+ * \fn  CanTranscoderEcuId::Decoder::decode
  *
  * @return  shared_pointer<CanTranscoder>
  */
-shared_pointer<CanTranscoder> CanTranscoderEcuId::Encoder::encode()
+shared_pointer<CanTranscoder> CanTranscoderEcuId::Decoder::decode()
 {
   const char* ptr = reinterpret_cast<const char*>(msg()->data());
   const char* end = reinterpret_cast<const char*>(msg()->data() + msg()->length());

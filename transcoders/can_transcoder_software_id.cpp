@@ -34,11 +34,11 @@ CanTranscoderSoftwareId::~CanTranscoderSoftwareId()
 }
 
 /**
- * \fn  CanTranscoderSoftwareId::Encoder::encode
+ * \fn  CanTranscoderSoftwareId::Decoder::decode
  *
  * @return  shared_pointer<CanTranscoder
  */
-shared_pointer<CanTranscoder> CanTranscoderSoftwareId::Encoder::encode()
+shared_pointer<CanTranscoder> CanTranscoderSoftwareId::Decoder::decode()
 {
   if (msg()->length() <= 1)
     return shared_pointer<CanTranscoder>();
