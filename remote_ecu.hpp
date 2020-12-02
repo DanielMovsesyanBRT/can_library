@@ -10,7 +10,7 @@
 
 #include "can_ecu.hpp"
 #include "can_utils.hpp"
-#include "transcoders/can_transcoder_software_id.hpp"
+#include "transcoders/can_transcoder.hpp"
 
 #include <functional>
 #include <mutex>
@@ -58,7 +58,9 @@ private:
 
 
   static  allocator<RemoteECU>*   _allocator;
+  
   shared_pointer<CanTranscoder>   _sid;
+  shared_pointer<CanTranscoder>   _eid;
 
   mutable RecoursiveMutex         _mutex;
   

@@ -12,6 +12,7 @@
 #include "remote_ecu.hpp"
 #include "transport_protocol/can_transport_rxsession.hpp"
 #include "transport_protocol/can_transport_txsession.hpp"
+#include "transcoders/can_transcoder_ecu_id.hpp"
 #include "transcoders/can_transcoder_software_id.hpp"
 
 namespace brt {
@@ -50,7 +51,8 @@ bool can_library_init(const LibraryConfig& cfg /*= LibraryConfig()*/)
       (RemoteECU::_allocator != nullptr)  ||
       (TxSession::_allocator != nullptr)  ||
       (RxSession::_allocator != nullptr)  || 
-      (CanTranscoderSoftwareId::_allocator != nullptr))
+      (CanTranscoderSoftwareId::_allocator != nullptr) || 
+      (CanTranscoderEcuId::_allocator != nullptr))
     return false;
   
   CanMessage::_small_msg_allocator    = new allocator<CanMessage,8>(cfg._small_messages_pool_size);
@@ -60,7 +62,8 @@ bool can_library_init(const LibraryConfig& cfg /*= LibraryConfig()*/)
   TxSession::_allocator               = new allocator<TxSession>(cfg._tx_tpsessions_pool_size);
   RxSession::_allocator               = new allocator<RxSession>(cfg._rx_tpsessions_pool_size);
   CanTranscoderSoftwareId::_allocator = new allocator<CanTranscoderSoftwareId>(cfg._sid_transcoder_pool_size); 
-  
+  CanTranscoderEcuId::_allocator      = new allocator<CanTranscoderEcuId>(cfg._eid_transcoder_pool_size); 
+
   _library_initialized = true;
   return true;
 }
@@ -96,6 +99,9 @@ bool can_library_release()
   if (CanTranscoderSoftwareId::_allocator != nullptr)
     delete CanTranscoderSoftwareId::_allocator;
 
+  if (CanTranscoderEcuId::_allocator != nullptr)
+    delete CanTranscoderEcuId::_allocator;
+
   CanMessage::_small_msg_allocator    = nullptr;
   CanMessage::_big_msg_allocator      = nullptr;
   LocalECU::_allocator                = nullptr;
@@ -103,6 +109,7 @@ bool can_library_release()
   TxSession::_allocator               = nullptr;
   RxSession::_allocator               = nullptr;
   CanTranscoderSoftwareId::_allocator = nullptr;
+  CanTranscoderEcuId::_allocator      = nullptr;
 
   _library_initialized = false;
   return true;

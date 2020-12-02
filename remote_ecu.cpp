@@ -10,6 +10,9 @@
 #include "can_constants.hpp" 
 #include "can_processor.hpp" 
 
+#include "transcoders/can_transcoder_ecu_id.hpp"
+#include "transcoders/can_transcoder_software_id.hpp"
+
 namespace brt {
 namespace can {
 
@@ -68,6 +71,10 @@ bool RemoteECU::on_message_received(const CanMessagePtr& msg)
     _sid = CanTranscoderSoftwareId::Encoder(msg).encode();
     break;
 
+  case PGN_ECUID:
+    _eid = CanTranscoderEcuId::Encoder(msg).encode();
+    break;
+
   default:
     return false;
   }
@@ -87,6 +94,9 @@ shared_pointer<CanTranscoder> RemoteECU::get_requested_pgn(uint32_t pgn) const
   {
   case PGN_SoftwareID:
     return _sid;
+
+  case PGN_ECUID:
+    return _eid;
 
   default:
     break;

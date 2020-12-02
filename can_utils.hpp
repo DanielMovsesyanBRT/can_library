@@ -34,6 +34,7 @@ struct LibraryConfig
   , _tx_tpsessions_pool_size(32)
   , _rx_tpsessions_pool_size(32)
   , _sid_transcoder_pool_size(32)
+  , _eid_transcoder_pool_size(32)
   {  }
 
   size_t                          _local_ecu_pool_size;
@@ -44,6 +45,7 @@ struct LibraryConfig
   size_t                          _rx_tpsessions_pool_size;
 
   size_t                          _sid_transcoder_pool_size;
+  size_t                          _eid_transcoder_pool_size;
 };
 
 /**
