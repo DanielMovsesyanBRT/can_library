@@ -13,6 +13,8 @@ set(SOURCES
     can_utils.cpp
     local_ecu.cpp
     remote_ecu.cpp
+    transcoders/can_transcoder_software_id.cpp
+    transcoders/can_transcoder.cpp
     transport_protocol/can_transport_protocol.cpp
     transport_protocol/can_transport_rxsession.cpp
     transport_protocol/can_transport_session.cpp
@@ -23,5 +25,6 @@ add_library(can_library can_library.cpp ${SOURCES})
 target_include_directories(${PROJECT_NAME}
                             PUBLIC
                               $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/transcoders>
                             PRIVATE 
-                              transport_protocol)
+                              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/transport_protocol>)

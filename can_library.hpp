@@ -9,10 +9,12 @@
 #include "can_message.hpp"
 #include "local_ecu.hpp"
 #include "remote_ecu.hpp"
+#include "can_transcoder.hpp"
 
 
 namespace brt {
 namespace can {
+
 
 /**
  * \class CanInterface
@@ -21,6 +23,8 @@ namespace can {
 class CanInterface
 {
 public:
+    typedef std::function<void(const shared_pointer<CanTranscoder>&)> RequestCallback;
+
   /**
    * \class Callback
    *
@@ -30,9 +34,9 @@ public:
   public:
     virtual ~Callback() {}
     virtual uint64_t                get_time_tick_nanoseconds() const = 0;
-    virtual void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote,const std::string& bus_name) = 0;
+    virtual void                    message_received(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,const std::string& bus_name) = 0;
     virtual void                    send_can_packet(const std::string& bus, const CanPacket& packet) = 0;
-    virtual void                    on_remote_ecu(RemoteECUPtr remote,const std::string& bus_name) = 0;
+    virtual void                    on_remote_ecu(const RemoteECUPtr& remote,const std::string& bus_name) = 0;
 
     virtual uint32_t                create_mutex() = 0;
     virtual void                    delete_mutex(uint32_t) = 0;
@@ -52,11 +56,11 @@ public:
 
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus) = 0;
 
-  virtual bool                    destroy_local_ecu(LocalECUPtr) = 0;
+  virtual bool                    destroy_local_ecu(const LocalECUPtr&) = 0;
   virtual bool                    destroy_local_ecu(const CanName& name) = 0;
 
   virtual bool                    received_can_packet(const CanPacket& packet,const std::string& bus) = 0;
-  virtual bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
+  virtual bool                    send_can_message(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,
                                                         const std::initializer_list<std::string>& buses = std::initializer_list<std::string>()) = 0;
 
 
@@ -65,6 +69,8 @@ public:
 
   virtual void                    get_remote_ecus(fixed_list<RemoteECUPtr>& list, 
                                                 const std::initializer_list<std::string>& buses = std::initializer_list<std::string>()) = 0;
+
+  virtual bool                    request_pgn(uint32_t pgn,const LocalECUPtr& local,const RemoteECUPtr& remote,const RequestCallback& callback) = 0;
 
           Callback*               cback() const { return _cback; }
 protected:

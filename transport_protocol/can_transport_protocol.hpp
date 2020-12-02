@@ -32,7 +32,8 @@ public:
   CanTransportProtocol(CanProcessor* processor);
   virtual ~CanTransportProtocol();
 
-  virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name);
+  virtual bool                    send_message(const CanMessagePtr& message,const LocalECUPtr& local,
+                                            const RemoteECUPtr& remote, const std::string& bus_name);
 
 private:
           bool                    on_update();

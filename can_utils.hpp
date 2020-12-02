@@ -20,6 +20,33 @@ namespace brt {
 namespace can {
 
 /**
+ * \struct LibraryConfig
+ *
+ */
+struct LibraryConfig
+{
+  LibraryConfig() 
+  // Default Values
+  : _local_ecu_pool_size(1024)
+  , _remote_ecu_pool_size(1024)
+  , _big_messages_pool_size(1024)
+  , _small_messages_pool_size(1024)
+  , _tx_tpsessions_pool_size(32)
+  , _rx_tpsessions_pool_size(32)
+  , _sid_transcoder_pool_size(32)
+  {  }
+
+  size_t                          _local_ecu_pool_size;
+  size_t                          _remote_ecu_pool_size;
+  size_t                          _big_messages_pool_size;
+  size_t                          _small_messages_pool_size;
+  size_t                          _tx_tpsessions_pool_size;
+  size_t                          _rx_tpsessions_pool_size;
+
+  size_t                          _sid_transcoder_pool_size;
+};
+
+/**
  * \class fifo
  *
  */
@@ -267,7 +294,7 @@ public:
 
   size_t size() const { return _num_elements; }
   bool   empty() const { return (_num_elements == 0);}
-  
+ 
   iterator begin() { return iterator(_buffer.data(),_buffer.data() + _buffer.size()); }
   iterator end() { return iterator(_buffer.data() + _buffer.size(),_buffer.data() + _buffer.size()); }
 
@@ -564,29 +591,57 @@ private:
   std::atomic_uint32_t            _thread_id;
 };
 
-/**
- * \struct LibraryConfig
- *
- */
-struct LibraryConfig
-{
-  LibraryConfig() 
-  // Default Values
-  : _local_ecu_pool_size(1024)
-  , _remote_ecu_pool_size(1024)
-  , _big_messages_pool_size(1024)
-  , _small_messages_pool_size(1024)
-  , _tx_tpsessions_pool_size(32)
-  , _rx_tpsessions_pool_size(32)
-  {  }
 
-  size_t                          _local_ecu_pool_size;
-  size_t                          _remote_ecu_pool_size;
-  size_t                          _big_messages_pool_size;
-  size_t                          _small_messages_pool_size;
-  size_t                          _tx_tpsessions_pool_size;
-  size_t                          _rx_tpsessions_pool_size;
-};
+inline std::array<uint8_t,2> can_pack16(uint16_t value)
+{
+  return {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF)
+    };
+}
+
+inline std::array<uint8_t,3> can_pack24(uint32_t value)
+{
+  return {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+    static_cast<uint8_t>((value >> 16) & 0xFF),
+    };
+}
+
+inline std::array<uint8_t,4> can_pack32(uint32_t value)
+{
+  return {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+    static_cast<uint8_t>((value >> 16) & 0xFF),
+    static_cast<uint8_t>((value >> 24) & 0xFF),
+    };
+}
+
+inline uint16_t can_unpack16(const uint8_t* data)
+{
+  return static_cast<uint16_t>(data[0] | (data[1] << 8));
+}
+
+inline uint32_t can_unpack24(const uint8_t* data)
+{
+  return static_cast<uint32_t>(data[0] | (data[1] << 8) | (data[2] << 16));
+}
+
+inline int32_t can_unpack24_signed(const uint8_t* data)
+{
+  int32_t val = static_cast<int32_t>(data[0] | (data[1] << 8) | (data[2] << 16));
+  if ((val & 0x800000) != 0)
+    val |= 0xFF000000;
+  return val;
+}
+
+inline uint32_t can_unpack32(const uint8_t* data)
+{
+  return static_cast<uint32_t>(data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24));
+}
+
 
 
 } // can

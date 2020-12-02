@@ -12,6 +12,7 @@
 #include "remote_ecu.hpp"
 #include "transport_protocol/can_transport_rxsession.hpp"
 #include "transport_protocol/can_transport_txsession.hpp"
+#include "transcoders/can_transcoder_software_id.hpp"
 
 namespace brt {
 namespace can {
@@ -48,15 +49,17 @@ bool can_library_init(const LibraryConfig& cfg /*= LibraryConfig()*/)
       (LocalECU::_allocator != nullptr)   ||
       (RemoteECU::_allocator != nullptr)  ||
       (TxSession::_allocator != nullptr)  ||
-      (RxSession::_allocator != nullptr))
+      (RxSession::_allocator != nullptr)  || 
+      (CanTranscoderSoftwareId::_allocator != nullptr))
     return false;
   
-  CanMessage::_small_msg_allocator = new allocator<CanMessage,8>(cfg._small_messages_pool_size);
-  CanMessage::_big_msg_allocator   = new allocator<CanMessage,255*7>(cfg._big_messages_pool_size);
-  LocalECU::_allocator             = new allocator<LocalECU>(cfg._local_ecu_pool_size);
-  RemoteECU::_allocator            = new allocator<RemoteECU>(cfg._remote_ecu_pool_size);
-  TxSession::_allocator            = new allocator<TxSession>(cfg._tx_tpsessions_pool_size);
-  RxSession::_allocator            = new allocator<RxSession>(cfg._rx_tpsessions_pool_size);
+  CanMessage::_small_msg_allocator    = new allocator<CanMessage,8>(cfg._small_messages_pool_size);
+  CanMessage::_big_msg_allocator      = new allocator<CanMessage,255*7>(cfg._big_messages_pool_size);
+  LocalECU::_allocator                = new allocator<LocalECU>(cfg._local_ecu_pool_size);
+  RemoteECU::_allocator               = new allocator<RemoteECU>(cfg._remote_ecu_pool_size);
+  TxSession::_allocator               = new allocator<TxSession>(cfg._tx_tpsessions_pool_size);
+  RxSession::_allocator               = new allocator<RxSession>(cfg._rx_tpsessions_pool_size);
+  CanTranscoderSoftwareId::_allocator = new allocator<CanTranscoderSoftwareId>(cfg._sid_transcoder_pool_size); 
   
   _library_initialized = true;
   return true;
@@ -90,12 +93,16 @@ bool can_library_release()
   if (RxSession::_allocator != nullptr)
     delete RxSession::_allocator;
 
-  CanMessage::_small_msg_allocator = nullptr;
-  CanMessage::_big_msg_allocator   = nullptr;
-  LocalECU::_allocator             = nullptr;
-  RemoteECU::_allocator            = nullptr;
-  TxSession::_allocator            = nullptr;
-  RxSession::_allocator            = nullptr;
+  if (CanTranscoderSoftwareId::_allocator != nullptr)
+    delete CanTranscoderSoftwareId::_allocator;
+
+  CanMessage::_small_msg_allocator    = nullptr;
+  CanMessage::_big_msg_allocator      = nullptr;
+  LocalECU::_allocator                = nullptr;
+  RemoteECU::_allocator               = nullptr;
+  TxSession::_allocator               = nullptr;
+  RxSession::_allocator               = nullptr;
+  CanTranscoderSoftwareId::_allocator = nullptr;
 
   _library_initialized = false;
   return true;

@@ -199,6 +199,34 @@ friend class CanMessage;
 public:
   CanMessagePtr() {}
 
+  template<size_t _Size>
+  explicit CanMessagePtr(const std::array<uint8_t,_Size>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
+                        CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback()) 
+  {
+    if ((CanMessage::_big_msg_allocator == nullptr) || (CanMessage::_small_msg_allocator == nullptr))
+      throw std::runtime_error("Library is not properly initialized");
+
+    CanMessage* msg = nullptr;
+    if (data.size() <= 8)
+    {
+      msg = reinterpret_cast<CanMessage*>(CanMessage::_small_msg_allocator->allocate());
+      if (msg == nullptr)
+        msg = reinterpret_cast<CanMessage*>(::malloc(sizeof(CanMessage) + 8));
+    }
+    else if (data.size() <= (255*7))
+    {
+      msg = reinterpret_cast<CanMessage*>(CanMessage::_big_msg_allocator->allocate());
+      if (msg == nullptr)
+        msg = reinterpret_cast<CanMessage*>(::malloc(sizeof(CanMessage) + (255*7)));
+    }
+
+    if (msg == nullptr)
+      throw std::bad_alloc();
+
+    ::new (msg) CanMessage(data.begin(), data.size(), pgn, priority, cback);
+    reset(msg);
+  }
+
   explicit CanMessagePtr(const std::initializer_list<uint8_t>& data, uint32_t pgn, uint8_t priority = DEFAULT_CAN_PRIORITY,
                         CanMessage::ConfirmationCallback cback = CanMessage::ConfirmationCallback());
 

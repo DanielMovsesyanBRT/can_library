@@ -35,7 +35,7 @@ public:
    * @param  remote : RemoteECUPtr 
    * @param  bus_name : const std::string&
    */
-  TransportSession(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr local,CanECUPtr remote,const std::string& bus_name)
+  TransportSession(CanProcessor* processor, Mutex* mutex, const CanMessagePtr& message,const CanECUPtr& local,const CanECUPtr& remote,const std::string& bus_name)
   : _processor(processor), _mutex(mutex), _message(message), _source(local), _destination(remote), _bus_name(bus_name)
   { 
   }

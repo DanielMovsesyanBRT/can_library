@@ -22,11 +22,14 @@ allocator<LocalECU>* LocalECU::_allocator = nullptr;
  *
  * @param  processor : CanProcessor* 
  * @param  name : const CanName& 
+ * @param  buses :  const std::initializer_list<std::string>& 
  */
-LocalECU::LocalECU(CanProcessor* processor,const CanName& name /*= CanName()*/)
+LocalECU::LocalECU(CanProcessor* processor,const CanName& name, const std::string* buses, size_t num_buses)
 : CanECU(processor,name)
 , _mutex(processor)
 {
+  for (size_t index = 0; index < num_buses; index++)
+    _container_map.insert(ContainerMap::value_type(buses[index], Container()));
 
 }
 
@@ -59,13 +62,8 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
 
     auto container = _container_map.find(bus_name);
     if (container == _container_map.end())
-    {
-      auto pair = _container_map.insert(ContainerMap::value_type(bus_name, Container()));
-      if (!pair.second)
-        return; // Assert
-      
-      container = pair.first;
-    }
+      return;
+
     // With Normal address claimed sent we should put the device into waiting state for
     // 250 ms according to ISO 11783-5 requirements
     container->second._status = eWaiting;
@@ -91,7 +89,7 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
         {
           Queue& queue = container->second._fifo.front();
           array.push_back(std::pair<CanMessagePtr,RemoteECUPtr>(queue._message, queue._remote));
-          container->second._fifo.pop_front();
+          container->second._fifo.pop();
         }
       }
 
@@ -108,12 +106,12 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
 /**
  * \fn  LocalECU::send_message
  *
- * @param  message : CanMessagePtr 
- * @param  remote : RemoteECUPtr 
+ * @param  message : const CanMessagePtr& 
+ * @param  remote : const RemoteECUPtr& 
  * @param  & bus_name : const std::string
  * @return  bool
  */
-bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote,const std::string& bus_name)
+bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,const std::string& bus_name)
 {
   {
     std::lock_guard<Mutex> l(_mutex);
@@ -126,7 +124,7 @@ bool LocalECU::send_message(CanMessagePtr message,RemoteECUPtr remote,const std:
 
     if (container->second._status == eWaiting)
     {
-      container->second._fifo.push_back(Queue(message, bus_name));
+      container->second._fifo.push(Queue(message, remote, bus_name));
       return true;
     }
   }
@@ -188,25 +186,6 @@ void LocalECU::operator delete  ( void* ptr )
 
   if (!_allocator->free(ptr))
     ::free(ptr);
-}
-
-/**
- * \fn  constructor LocalECUPtr::LocalECUPtr
- *
- * @param  processor : CanProcessor* 
- * @param  name : const CanName& 
- */
-LocalECUPtr::LocalECUPtr(CanProcessor* processor,const CanName& name /*= CanName()*/)
-{
-  if (LocalECU::_allocator == nullptr)
-    throw std::runtime_error("Library is not properly initialized");
-  
-  LocalECU* ecu = reinterpret_cast<LocalECU*>(LocalECU::_allocator->allocate());
-  if (ecu == nullptr)
-    ecu = reinterpret_cast<LocalECU*>(::malloc(sizeof(LocalECU)));
-
-  ::new (ecu) LocalECU(processor,name);
-  reset(ecu);
 }
 
 

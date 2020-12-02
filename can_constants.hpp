@@ -30,6 +30,9 @@ enum PGNs
 
   PGN_AddressClaimed      = 0xEE00, // 60928
   PGN_ProprietaryA        = 0xEF00, // 61184
+
+  PGN_ECUID               = 0xFDC5, // 64965
+  PGN_SoftwareID          = 0xFEDA, // 65242
   PGN_Timedate            = 0xFEE6, // 65254
 
   PGN_ProprietaryB_start  = 0xFF00,

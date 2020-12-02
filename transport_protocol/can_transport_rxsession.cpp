@@ -16,12 +16,12 @@ allocator<RxSession>* RxSession::_allocator = nullptr;
  *
  * @param  processor : CanProcessor* 
  * @param  mutex :  Mutex* 
- * @param  source :  CanECUPtr 
- * @param  destination : CanECUPtr 
- * @param  & bus_name :  const std::string
+ * @param  source : const CanECUPtr&
+ * @param  destination : const CanECUPtr& 
+ * @param  bus_name :  const std::string&
  * @param  packet :  const CanPacket& 
  */
-RxSession::RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
+RxSession::RxSession(CanProcessor* processor, Mutex* mutex,const CanECUPtr& source,const CanECUPtr& destination,
                               const std::string& bus_name, const CanPacket& packet)
 : TransportSession(processor, mutex, CanMessagePtr(), source, destination, bus_name)
 , _range()

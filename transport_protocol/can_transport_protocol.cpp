@@ -57,7 +57,7 @@ CanTransportProtocol::~CanTransportProtocol()
  * @param  & bus_name :  const std::string
  * @return  bool
  */
-bool CanTransportProtocol::send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name)
+bool CanTransportProtocol::send_message(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote, const std::string& bus_name)
 {
   if ((message->length() <= 8) || (message->length() > 1785))
     return false;

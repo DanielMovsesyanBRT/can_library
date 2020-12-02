@@ -162,22 +162,34 @@ bool CanProcessor::register_can_bus(const std::string& bus_name)
  */
 void CanProcessor::on_request(const CanPacket& packet,const std::string& bus_name)
 {
-  if (packet.is_broadcast())
+  if (packet.dlc() < 3)
+    return;
+  
+  // Requested Address Claimed
+  if (can_unpack24(packet.data()) == PGN_AddressClaimed)
   {
-    fixed_list<LocalECUPtr> ecus;
-    _device_db.get_local_ecus(ecus, { bus_name });
-    for (auto ecu : ecus)
+    if (packet.is_broadcast())
     {
+      fixed_list<LocalECUPtr> ecus;
+      _device_db.get_local_ecus(ecus, { bus_name });
+      for (auto ecu : ecus)
+      {
+        if (ecu)
+          ecu->claim_address(ecu->get_address(bus_name), bus_name);
+      }
+    }
+    else
+    {
+      LocalECUPtr ecu(_device_db.get_ecu_by_address(packet.da(), bus_name));
       if (ecu)
         ecu->claim_address(ecu->get_address(bus_name), bus_name);
     }
   }
   else
   {
-    LocalECUPtr ecu(_device_db.get_ecu_by_address(packet.da(), bus_name));
-    if (ecu)
-      ecu->claim_address(ecu->get_address(bus_name), bus_name);
+    // todo:
   }
+
 }
 
 /**
@@ -197,21 +209,6 @@ CanBusStatus CanProcessor::get_bus_status(const std::string& bus) const
 }
 
 /**
- * \fn  CanProcessor::get_all_buses
- *
- * @return  std::vector<std::string
- */
-size_t CanProcessor::get_all_buses(fixed_list<std::string,10>& buses) const
-{
-  buses.clear();
-  std::lock_guard<RecoursiveMutex> l(_mutex);
-  for (auto bus : _bus_map)
-    buses.push(bus.first);
-
-  return buses.size();
-}
-
-/**
  * \fn  CanProcessor::create_local_ecu
  *
  * @param  name : const CanName& 
@@ -228,41 +225,29 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name,
     return LocalECUPtr(ecu);
 
   bool result = false;
-  LocalECUPtr local(this, name);
-  if (desired_buses.size() == 0) // all buses
-  {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
-    for (auto bus : _bus_map)
-    {
-      if (!_device_db.add_local_ecu(local, bus.first, desired_address))
-      {
-        // Unable to register device on the Bus
-        // So we are going to disable it
-        local->disable_device(bus.first);
-      }
-      else
-        result = true;
-    }
-  }
-  else
-  {
-    for (auto bus : desired_buses)
-    {
-      {
-        std::lock_guard<RecoursiveMutex> l(_mutex);
-        if (_bus_map.find(bus) == _bus_map.end())
-          continue;
-      }
 
-      if (!_device_db.add_local_ecu(local, bus, desired_address))
-      {
-        // Unable to register device on the Bus
-        // So we are going to disable it
-        local->disable_device(bus);
-      }
-      else
-        result = true;
+  fixed_list<std::string,100> buses(desired_buses);
+
+  if (buses.empty())
+    get_all_buses(buses);
+  
+  LocalECUPtr local(this, name, buses);
+  for (auto bus : buses)
+  {
+    {
+      std::lock_guard<RecoursiveMutex> l(_mutex);
+      if (_bus_map.find(bus) == _bus_map.end())
+        continue;
     }
+
+    if (!_device_db.add_local_ecu(local, bus, desired_address))
+    {
+      // Unable to register device on the Bus
+      // So we are going to disable it
+      local->disable_device(bus);
+    }
+    else
+      result = true;
   }
 
   if (!result)
@@ -294,7 +279,7 @@ RemoteECUPtr CanProcessor::register_abstract_remote_ecu(uint8_t address,const st
  * @param  local : LocalECUPtr 
  * @return  bool
  */
-bool CanProcessor::destroy_local_ecu(LocalECUPtr local)
+bool CanProcessor::destroy_local_ecu(const LocalECUPtr& local)
 {
   return destroy_local_ecu(local->name());
 }
@@ -358,13 +343,13 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const std::string
 /**
  * \fn  CanProcessor::send_can_message
  *
- * @param  message : CanMessagePtr 
- * @param  local : LocalECUPtr 
- * @param  remote  : RemoteECUPtr 
- * @param  buses : const std::initializer_list<std::string> buses&
+ * @param  message : const CanMessagePtr& 
+ * @param  local : const LocalECUPtr& 
+ * @param  remote : const RemoteECUPtr& 
+ * @param  buses :  const std::initializer_list<std::string>& 
  * @return  bool
  */
-bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
+bool CanProcessor::send_can_message(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,
                             const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string> buses()*/)
 {
   if (!local)
@@ -378,6 +363,9 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
   bool result = false;
   for (auto bus_name : bss)
   {
+    if (remote && remote->queue_message(message, local, bus_name))
+      continue;
+
     for (auto transport : _transport_stack)
     {
       if (transport->send_message(message, local, remote, bus_name))
@@ -394,29 +382,48 @@ bool CanProcessor::send_can_message(CanMessagePtr message,LocalECUPtr local,Remo
 /**
  * \fn  CanProcessor::message_received
  *
- * @param  message : CanMessagePtr 
- * @param  local : LocalECUPtr 
- * @param  remote :  RemoteECUPtr 
+ * @param  message : const CanMessagePtr& 
+ * @param  local : const LocalECUPtr& 
+ * @param  remote :  const RemoteECUPtr& 
  * @param  bus_name : const std::string&
  */
-void CanProcessor::message_received(CanMessagePtr message,LocalECUPtr local,
-                                   RemoteECUPtr remote,const std::string& bus_name)
+void CanProcessor::message_received(const CanMessagePtr& message,const LocalECUPtr& local,
+                                   const RemoteECUPtr& remote,const std::string& bus_name)
 {
-  cback()->message_received(message, local, remote, bus_name);
+  if (remote && remote->on_message_received(message))
+  {
+    auto req = remote->get_requested_pgn(message->pgn());
+    if (req)
+    {
+      std::lock_guard<RecoursiveMutex> l(_mutex);
+      for (auto iter = _requested_pgns.begin(); iter != _requested_pgns.end(); )
+      {
+        if ((iter->_pgn == message->pgn()) && (iter->_ecu == remote))
+        {
+          iter->_callback(req);
+          iter = _requested_pgns.erase(iter);
+        }
+        else
+          ++iter;
+      }
+    }     
+  }
+  else
+    cback()->message_received(message, local, remote, bus_name);
 }
 
 
 /**
  * \fn  CanProcessor::SimpleTransport::send_message
  *
- * @param  message : CanMessagePtr 
- * @param  local :  LocalECUPtr 
- * @param  remote :  RemoteECUPtr 
- * @param  bus_name : const std::string& 
+ * @param  message : const CanMessagePtr& 
+ * @param  local : const LocalECUPtr& 
+ * @param  remote :  const RemoteECUPtr& 
+ * @param  & bus_name : const std::string
  * @return  bool
  */
-bool CanProcessor::SimpleTransport::send_message(CanMessagePtr message, LocalECUPtr local, 
-                                                      RemoteECUPtr remote,const std::string& bus_name)
+bool CanProcessor::SimpleTransport::send_message(const CanMessagePtr& message,const LocalECUPtr& local, 
+                                                      const RemoteECUPtr& remote,const std::string& bus_name)
 {
   if (message->length() > 8)
     return false;
@@ -458,15 +465,42 @@ void CanProcessor::can_packet_confirm(const CanPacket& packet,CanMessageConfirma
 }
 
 /**
+ * \fn  CanProcessor::request_pgn
+ *
+ * @param  pgn : uint32_t 
+ * @param  local : const LocalECUPtr& 
+ * @param  remote : const RemoteECUPtr& 
+ * @param  callback : const RequestCallback& 
+ * @return  bool
+ */
+bool CanProcessor::request_pgn(uint32_t pgn,const LocalECUPtr& local,const RemoteECUPtr& remote,const RequestCallback& callback)
+{
+  if (!remote)
+    return false;
+
+  auto req_pgn = remote->get_requested_pgn(pgn);
+  if (req_pgn)
+    callback(req_pgn);
+  else
+  {
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    _requested_pgns.push(RequestedPGNs(pgn,remote,callback));
+    send_can_message(CanMessagePtr(can_pack24(pgn),PGN_Request), local, remote);
+  }
+
+  return true;
+}
+
+/**
  * \fn  CanProcessor::send_raw_packet
  *
  * @param  packet : const CanPacket& 
  * @param  bus_name : const std::string&
- * @param  fn :  ConfirmationCallback 
+ * @param  fn :  const ConfirmationCallback& 
  * @return  bool
  */
 bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bus_name,
-                      ConfirmationCallback fn/* = ConfirmationCallback()*/)
+                      const ConfirmationCallback& fn/* = ConfirmationCallback()*/)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
   auto bus = _bus_map.find(bus_name);
@@ -501,7 +535,7 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const std::string& bu
  * @param  pgn : uint32_t 
  * @param  fn :  PGNCallback 
  */
-void CanProcessor::register_pgn_receiver(uint32_t pgn, PGNCallback fn)
+void CanProcessor::register_pgn_receiver(uint32_t pgn, const PGNCallback& fn)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
   _pgn_receivers.insert(std::unordered_map<uint32_t,PGNCallback>::value_type(pgn,fn));
@@ -512,7 +546,7 @@ void CanProcessor::register_pgn_receiver(uint32_t pgn, PGNCallback fn)
  *
  * @param  fn : UpdateCallback 
  */
-void CanProcessor::register_updater(UpdateCallback fn)
+void CanProcessor::register_updater(const UpdateCallback& fn)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
   _updaters.push_back(fn);
@@ -524,7 +558,7 @@ void CanProcessor::register_updater(UpdateCallback fn)
  * @param  bus_name : const std::string&
  * @param  fn :  BusStatusCallback 
  */
-void CanProcessor::register_bus_callback(const std::string& bus_name, BusStatusCallback fn)
+void CanProcessor::register_bus_callback(const std::string& bus_name, const BusStatusCallback& fn)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
   auto bus = _bus_map.find(bus_name);

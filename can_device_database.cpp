@@ -34,6 +34,8 @@ CanDeviceDatabase::CanDeviceDatabase(CanProcessor* processor)
  */
 CanDeviceDatabase::~CanDeviceDatabase()
 {
+  _remote_devices.clear();
+  _prerecorded_local_devices.clear();
 }
 
 /**
@@ -282,7 +284,10 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
     local->claim_address(sa, bus_name);
 
   if (remote)
+  {
+    remote->init_status();
     _processor->on_remote_ecu(remote, bus_name);
+  }
 }
 
 /**

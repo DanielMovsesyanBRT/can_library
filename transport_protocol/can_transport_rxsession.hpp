@@ -23,7 +23,7 @@ friend RxSessionPtr;
 friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
-  RxSession(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
+  RxSession(CanProcessor* processor, Mutex* mutex,const CanECUPtr& source,const CanECUPtr& destination,
                               const std::string& bus_name, const CanPacket& packet);
 
 public:

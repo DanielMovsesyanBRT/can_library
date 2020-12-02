@@ -22,6 +22,10 @@ allocator<RemoteECU>* RemoteECU::_allocator = nullptr;
  */
 RemoteECU::RemoteECU(CanProcessor* processor,const CanName& name /*= CanName()*/)
 : CanECU(processor,name)
+, _status_timer(processor->get_time_tick())
+, _status_ready(false)
+, _mutex(processor)
+, _queue()
 {
 
 }
@@ -48,6 +52,96 @@ void RemoteECU::operator delete  ( void* ptr )
 
   if (!_allocator->free(ptr))
     ::free(ptr);
+}
+
+/**
+ * \fn  RemoteECU::on_message_received
+ *
+ * @param  msg : const CanMessagePtr& 
+ * @return  bool
+ */
+bool RemoteECU::on_message_received(const CanMessagePtr& msg)
+{
+  switch(msg->pgn())
+  {
+  case PGN_SoftwareID:
+    _sid = CanTranscoderSoftwareId::Encoder(msg).encode();
+    break;
+
+  default:
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * \fn  RemoteECU::get_requested_pgn
+ *
+ * @param  pgn : uint32_t 
+ * @return  shared_pointer<CanTranscoder
+ */
+shared_pointer<CanTranscoder> RemoteECU::get_requested_pgn(uint32_t pgn) const
+{
+  switch(pgn)
+  {
+  case PGN_SoftwareID:
+    return _sid;
+
+  default:
+    break;
+  }
+
+  return shared_pointer<CanTranscoder>();
+}
+
+/**
+ * \fn  RemoteECU::init_status
+ *
+ */
+void RemoteECU::init_status()
+{
+  std::lock_guard<RecoursiveMutex> l(_mutex);
+  _status_ready = false;
+  _status_timer = processor()->get_time_tick();
+  
+  processor()->register_updater([this]()->bool
+  {
+    std::lock_guard<RecoursiveMutex> l(_mutex);
+    if (!_status_ready)
+    {
+      if ((processor()->get_time_tick() - _status_timer) > CAN_ADDRESS_CLAIMED_WAITING_TIME)
+      {
+        _status_ready = true;
+        while (!_queue.empty())
+        {
+          MsgQueue& msg = _queue.front();
+          processor()->send_can_message(msg._message, LocalECUPtr(msg._local), RemoteECUPtr(getptr()), { msg._bus_name });
+          _queue.pop();
+        }
+
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+/**
+ * \fn  RemoteECU::queue_message
+ *
+ * @param  remote : CanMessagePtr 
+ * @param  local :  LocalECUPtr 
+ * @param  & bus_name :  const std::string
+ */
+bool RemoteECU::queue_message(CanMessagePtr message, LocalECUPtr local, const std::string& bus_name)
+{
+  std::lock_guard<RecoursiveMutex> l(_mutex);
+  if (_status_ready)
+    return false;
+  
+  _queue.push(MsgQueue(message, local, bus_name));
+  return true;
 }
 
 /**

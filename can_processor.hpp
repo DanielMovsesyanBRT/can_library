@@ -27,6 +27,7 @@
 #include "remote_ecu.hpp"
 #include "transport_protocol/can_transport_rxsession.hpp"
 #include "transport_protocol/can_transport_txsession.hpp"
+#include "transcoders/can_transcoder.hpp"
 
 #include "can_protocol.hpp"
 
@@ -67,24 +68,34 @@ public:
 
   virtual bool                    register_can_bus(const std::string& bus);
           CanBusStatus            get_bus_status(const std::string& bus) const;
-          size_t                  get_all_buses(fixed_list<std::string,10>& buses) const;
+          
+          template<size_t _Size>
+          size_t                  get_all_buses(fixed_list<std::string,_Size>& buses) const
+          {
+            buses.clear();
+            std::lock_guard<RecoursiveMutex> l(_mutex);
+            for (auto bus : _bus_map)
+              buses.push(bus.first);
+
+            return buses.size();
+          }
   
   virtual bool                    received_can_packet(const CanPacket& packet,const std::string& bus);
 
-  virtual bool                    send_can_message(CanMessagePtr message,LocalECUPtr local,RemoteECUPtr remote,
+  virtual bool                    send_can_message(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,
                                                         const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
 
-          void                    message_received(CanMessagePtr message,LocalECUPtr local, RemoteECUPtr remote,const std::string& bus_name);
+          void                    message_received(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,const std::string& bus_name);
 
   virtual LocalECUPtr             create_local_ecu(const CanName& name,
                                             uint8_t desired_address = BROADCATS_CAN_ADDRESS,
                                             const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const std::string& bus);
 
-  virtual bool                    destroy_local_ecu(LocalECUPtr);
+  virtual bool                    destroy_local_ecu(const LocalECUPtr&);
   virtual bool                    destroy_local_ecu(const CanName& name);
 
-          void                    on_remote_ecu(RemoteECUPtr remote,const std::string& bus_name)
+          void                    on_remote_ecu(const RemoteECUPtr& remote,const std::string& bus_name)
           { cback()->on_remote_ecu(remote,bus_name); }
   
   virtual void                    can_packet_confirm(uint64_t packet_id,CanMessageConfirmation);
@@ -94,13 +105,15 @@ public:
                                                 const std::initializer_list<std::string>& buses = std::initializer_list<std::string>())
           { device_db().get_remote_ecus(list, buses); }
           
+  virtual bool                    request_pgn(uint32_t pgn,const LocalECUPtr& local,const RemoteECUPtr& remote,const RequestCallback& callback);
+
           CanDeviceDatabase&      device_db() { return _device_db; }
           const CanDeviceDatabase& device_db() const { return _device_db; }
 
-          bool                    send_raw_packet(const CanPacket& packet,const std::string& bus_name,ConfirmationCallback fn = ConfirmationCallback());
-          void                    register_pgn_receiver(uint32_t pgn, PGNCallback fn);
-          void                    register_updater(UpdateCallback fn);
-          void                    register_bus_callback(const std::string& bus_name, BusStatusCallback fn);
+          bool                    send_raw_packet(const CanPacket& packet,const std::string& bus_name,const ConfirmationCallback& fn = ConfirmationCallback());
+          void                    register_pgn_receiver(uint32_t pgn, const PGNCallback& fn);
+          void                    register_updater(const UpdateCallback& fn);
+          void                    register_bus_callback(const std::string& bus_name,const BusStatusCallback& fn);
 
           uint64_t                get_time_tick() const;
           uint32_t                create_mutex() { return cback()->create_mutex(); }
@@ -108,6 +121,7 @@ public:
           void                    lock_mutex(uint32_t mtx_id) { cback()->lock_mutex(mtx_id); }
           void                    unlock_mutex(uint32_t mtx_id) { cback()->unlock_mutex(mtx_id); }
           uint32_t                get_current_thread_id() const { return cback()->get_current_thread_id(); }
+
 
 private:
           void                    on_request(const CanPacket&,const std::string&);
@@ -125,7 +139,8 @@ private:
     SimpleTransport(CanProcessor* processor) : CanProtocol(processor) {}
     virtual ~SimpleTransport() {}
 
-    virtual bool                    send_message(CanMessagePtr message, LocalECUPtr local, RemoteECUPtr remote, const std::string& bus_name);
+    virtual bool                    send_message(const CanMessagePtr& message,const LocalECUPtr& local,
+                                              const RemoteECUPtr& remote, const std::string& bus_name);
   };
 
   mutable RecoursiveMutex         _mutex;
@@ -163,7 +178,7 @@ private:
   struct PacketConfirmation
   {
     PacketConfirmation() = default;
-    PacketConfirmation(uint64_t packet_id,ConfirmationCallback cback)
+    PacketConfirmation(uint64_t packet_id,const ConfirmationCallback& cback)
     : _packet_id(packet_id)
     , _callback(cback)
     { }
@@ -172,6 +187,22 @@ private:
     ConfirmationCallback          _callback;
   };
   fixed_list<PacketConfirmation>  _confirm_callbacks;
+
+  /**
+   * \struct RequestedPGNs
+   *
+   */
+  struct RequestedPGNs
+  {
+    RequestedPGNs() : _pgn(0) {}
+    RequestedPGNs(uint32_t pgn, const CanECUPtr& ecu,const RequestCallback& callback)
+    : _pgn(pgn), _ecu(ecu),  _callback(callback) {}
+    uint32_t                        _pgn;
+    CanECUPtr                       _ecu;
+    RequestCallback                 _callback;
+  };
+
+  fixed_list<RequestedPGNs>       _requested_pgns;
 };
 
 
