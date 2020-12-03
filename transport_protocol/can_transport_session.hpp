@@ -6,11 +6,11 @@
 
 #pragma once
 
-#include "../can_utils.hpp"
-#include "../local_ecu.hpp"
-#include "../remote_ecu.hpp"
+#include "can_utils.hpp"
+#include "local_ecu.hpp"
+#include "remote_ecu.hpp"
+#include "can_message.hpp"
 
-// #include "can_transport_actions.hpp"
 #include "can_transport_defines.hpp"
 
 namespace brt {
@@ -31,11 +31,13 @@ public:
    *
    * @param  processor : CanProcessor* 
    * @param  mutex :  Mutex* 
-   * @param  local :  LocalECUPtr 
-   * @param  remote : RemoteECUPtr 
-   * @param  bus_name : const std::string&
+   * @param   message :  const CanMessagePtr&
+   * @param   local :  const CanECUPtr&
+   * @param   remote : const CanECUPtr&
+   * @param   bus_name : const ConstantString&
    */
-  TransportSession(CanProcessor* processor, Mutex* mutex, const CanMessagePtr& message,const CanECUPtr& local,const CanECUPtr& remote,const std::string& bus_name)
+  TransportSession(CanProcessor* processor, Mutex* mutex, const CanMessagePtr& message,
+                            const CanECUPtr& local,const CanECUPtr& remote,const ConstantString& bus_name)
   : _processor(processor), _mutex(mutex), _message(message), _source(local), _destination(remote), _bus_name(bus_name)
   { 
   }
@@ -53,7 +55,7 @@ public:
           CanProcessor*           processor() { return _processor; }
           CanECUPtr               source_ecu() const { return _source; }
           CanECUPtr               destination_ecu() const { return _destination; }
-          std::string             bus_name() const { return _bus_name; }
+          const CanString&        bus_name() const { return _bus_name; }
           bool                    is_broadcast() const { return !_destination; }
           
   virtual void                    update() = 0;
@@ -68,7 +70,7 @@ public:
   virtual RemoteECUPtr            remote() = 0;
 
 
-  static  size_t                  hash(CanECUPtr local,CanECUPtr remote,const std::string& bus_name)
+  static  size_t                  hash(const CanECUPtr& local,const CanECUPtr& remote,const ConstantString& bus_name)
   {
     size_t hash = std::hash<CanECU*>()(local.get());
     if (remote)
@@ -76,11 +78,11 @@ public:
     else
       hash ^= std::hash<uint32_t>()(0xFFFFFFFF);
             
-    hash ^= std::hash<std::string>()(bus_name);
+    hash ^= std::_Hash_impl::hash(bus_name.data(), bus_name.length());
     return hash;
   }
 
-  static  size_t                  hash(shared_pointer<TransportSession> session)
+  static  size_t                  hash(const shared_pointer<TransportSession>& session)
   {
     return hash(session->_source, session->_destination, session->_bus_name);
   }
@@ -92,7 +94,7 @@ protected:
   CanMessagePtr                   _message;
   CanECUPtr                       _source;
   CanECUPtr                       _destination;
-  std::string                     _bus_name;
+  CanString                       _bus_name;
 };
 
 typedef shared_pointer<TransportSession> TransportSessionPtr;

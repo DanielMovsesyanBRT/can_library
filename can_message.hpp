@@ -27,7 +27,7 @@ namespace can {
 class CanPacket
 {
 public:
-  CanPacket() : _id(0), _dlc(0) {}
+  CanPacket() : _id(0), _dlc(0), _unique_id(0) {}
   /**
    * \fn  constructor CanPacket
    *
@@ -127,7 +127,7 @@ friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
 public:
-  typedef std::function<void(uint64_t,const std::string&,bool)>   ConfirmationCallback;
+  typedef std::function<void(uint64_t,const ConstantString&,bool)>   ConfirmationCallback;
 
 private:
   explicit CanMessage(const uint8_t* data, uint32_t length, uint32_t pgn
@@ -162,7 +162,7 @@ public:
           uint64_t                unique_id() const { return _unique_id; }
   
           ConfirmationCallback    cback() const { return _cback; }
-          void                    callback(const std::string& bus_name, bool succsess)
+          void                    callback(const ConstantString& bus_name, bool succsess)
           {
             if (_cback)
               _cback(_unique_id, bus_name, succsess);

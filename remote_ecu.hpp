@@ -49,7 +49,7 @@ public:
             return _status_ready; 
           }
 
-          bool                    queue_message(CanMessagePtr message, LocalECUPtr local, const std::string& bus_name);
+          bool                    queue_message(const CanMessagePtr& message,const LocalECUPtr& local, const ConstantString& bus_name);
 
 private:
   RemoteECU(CanProcessor*,const CanName& name = CanName());
@@ -67,15 +67,13 @@ private:
   struct MsgQueue
   {
     MsgQueue() = default;
-    MsgQueue(CanMessagePtr message, CanECUPtr local, const std::string& bus_name)
-    : _message(message), _local(local) 
-    {
-      strncpy(_bus_name, bus_name.c_str(), sizeof(_bus_name) - 1);
-    }
+    MsgQueue(const CanMessagePtr& message,const CanECUPtr& local, const ConstantString& bus_name)
+    : _message(message), _local(local), _bus_name(bus_name)
+    {   }
 
     CanMessagePtr                   _message;
     CanECUPtr                       _local;
-    char                            _bus_name[32];
+    CanString                       _bus_name;
   };
 
   fifo<MsgQueue>                  _queue;

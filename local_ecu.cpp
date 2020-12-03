@@ -42,9 +42,9 @@ LocalECU::~LocalECU()
  * \fn  LocalECU::claim_address
  *
  * @param  address : uint8_t 
- * @param  & bus : const std::string
+ * @param   bus_name : const ConstantString&
  */
-void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
+void LocalECU::claim_address(uint8_t address,const ConstantString& bus_name)
 {
   if (address == NULL_CAN_ADDRESS)
   {
@@ -56,42 +56,46 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
   {
     std::lock_guard<Mutex> l(_mutex);
 
-    auto container = _container_map.find(bus_name);
+    auto container = _container_map.find_if([&bus_name](const Container& cntr)->bool
+        {
+          return cntr._bus_name == bus_name;
+        });
+
     if (container == _container_map.end())
       return;
 
     // With Normal address claimed sent we should put the device into waiting state for
     // 250 ms according to ISO 11783-5 requirements
-    container->second._status = eWaiting;
-    container->second._time_tag = processor()->get_time_tick();
+    container->_status = eWaiting;
+    container->_time_tag = processor()->get_time_tick();
     
     processor()->register_updater([this, bus_name]()->bool
     {
       uint64_t cur_time = processor()->get_time_tick();
-      std::vector<std::pair<CanMessagePtr,RemoteECUPtr>> array;
-      
       {
         std::lock_guard<Mutex> l(_mutex);
-        auto container = _container_map.find(bus_name);
+        auto container = _container_map.find_if([bus_name](const Container& cntr)->bool
+            {
+              return cntr._bus_name == bus_name;
+            });
 
-        if (container->second._status != eWaiting)
+        if (container == _container_map.end())
+          return true;
+
+        if (container->_status != eWaiting)
           return true; // remove from updaters
        
-        if ((cur_time - container->second._time_tag) < CAN_ADDRESS_CLAIMED_WAITING_TIME)
+        if ((cur_time - container->_time_tag) < CAN_ADDRESS_CLAIMED_WAITING_TIME)
           return false;
 
-        container->second._status = eActive;
-        while (!container->second._fifo.empty())
+        container->_status = eActive;
+        while (!container->_fifo.empty())
         {
-          Queue& queue = container->second._fifo.front();
-          array.push_back(std::pair<CanMessagePtr,RemoteECUPtr>(queue._message, queue._remote));
-          container->second._fifo.pop();
+          Queue& queue = container->_fifo.front();
+          send_message(queue._message, queue._remote, bus_name, false);
+          container->_fifo.pop();
         }
       }
-
-      for (auto pair : array)
-        send_message(pair.first, pair.second, bus_name);
-
       return true;
     });
   }
@@ -102,25 +106,32 @@ void LocalECU::claim_address(uint8_t address,const std::string& bus_name)
 /**
  * \fn  LocalECU::send_message
  *
- * @param  message : const CanMessagePtr& 
- * @param  remote : const RemoteECUPtr& 
- * @param  & bus_name : const std::string
+ * @param   message : const CanMessagePtr&
+ * @param   remote : const RemoteECUPtr&
+ * @param   bus_name :  const ConstantString&
+ * @param  check_status  : bool
  * @return  bool
  */
-bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,const std::string& bus_name)
+bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,
+                              const ConstantString& bus_name,bool check_status /*= true*/)
 {
+  if (check_status)
   {
     std::lock_guard<Mutex> l(_mutex);
-    auto container = _container_map.find(bus_name);
+    auto container = _container_map.find_if([&bus_name](const Container& cntr)->bool
+        {
+          return cntr._bus_name == bus_name;
+        });
+
     if (container == _container_map.end())
       return false;
 
-    if (container->second._status == eInactive)
+    if (container->_status == eInactive)
       return false;
 
-    if (container->second._status == eWaiting)
+    if (container->_status == eWaiting)
     {
-      container->second._fifo.push(Queue(message, remote, bus_name));
+      container->_fifo.push(Queue(message, remote));
       return true;
     }
   }
@@ -136,9 +147,10 @@ bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& rem
   CanProcessor::ConfirmationCallback fn;
   if (message->cback())
   {
-    fn = [message, bus_name](uint64_t,CanMessageConfirmation confirm)
+    CanString b_name(bus_name);
+    fn = [message, b_name](uint64_t,CanMessageConfirmation confirm)
           {
-            message->callback(bus_name, confirm == eMessageSent);
+            message->callback(b_name, confirm == eMessageSent);
           };
   }
 
@@ -155,18 +167,21 @@ bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& rem
   return true;
 }
 
-
 /**
  * \fn  LocalECU::disable_device
  *
- * @param  & bus : const std::string
+ * @param bus_name : const ConstantString&
  */
-void LocalECU::disable_device(const std::string& bus)
+void LocalECU::disable_device(const ConstantString& bus_name)
 {
   std::lock_guard<Mutex> l(_mutex);
-  auto stat = _container_map.find(bus);
-  if (stat != _container_map.end())
-    stat->second._status = eInactive;
+  auto container = _container_map.find_if([&bus_name](const Container& cntr)->bool
+      {
+        return cntr._bus_name == bus_name;
+      });
+
+  if (container != _container_map.end())
+    container->_status = eInactive;
 }
 
 /**
@@ -227,33 +242,37 @@ CanMessagePtr LocalECU::request_pgn(uint32_t pgn)
  * \fn  LocalECU::activate
  *
  * @param  desired_address : uint8_t 
- * @param  buses :  const std::initializer_list<std::string>&
+ * @param  buses  :  const std::initializer_list<ConstantString>&
  */
-void LocalECU::activate(uint8_t desired_address, const std::initializer_list<std::string>& buses
-                                                      /* = std::initializer_list<std::string>() */)
+void LocalECU::activate(uint8_t desired_address, const std::initializer_list<ConstantString>& buses
+                                                      /* = std::initializer_list<ConstantString>() */)
 {
-  fixed_list<std::string,10>  bus_list(buses);
+  fixed_list<ConstantString,32>  bus_list(buses);
   if (bus_list.empty())
     processor()->get_all_buses(bus_list);
 
-  for (auto bus : bus_list)
+  for (auto bus_name : bus_list)
   {
     std::lock_guard<Mutex> l(_mutex);
-    auto iter = _container_map.find(bus);
-    if (iter == _container_map.end())
+    auto container = _container_map.find_if([bus_name](const Container& cntr)->bool
+        {
+          return cntr._bus_name == bus_name;
+        });
+
+    if (container == _container_map.end())
     {
-      auto res = _container_map.insert(ContainerMap::value_type(bus,Container()));
-      if (!res.second)
+      auto res = _container_map.push(Container(bus_name));
+      if (res == _container_map.end())
         continue;
 
-      iter = res.first;
+      container = res;
     }
 
-    if (iter->second._status != eInactive)
+    if (container->_status != eInactive)
       continue;
 
-    if (processor()->activate_local_ecu(LocalECUPtr(getptr()), bus, desired_address))
-      iter->second._status = eWaiting;
+    if (processor()->activate_local_ecu(LocalECUPtr(getptr()), bus_name, desired_address))
+      container->_status = eWaiting;
   }
 }
 

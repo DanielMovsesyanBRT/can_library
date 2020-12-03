@@ -37,10 +37,10 @@ CanECU::~CanECU()
 /**
  * \fn  CanECU::get_address
  *
- * @param  & bus_name : const std::string
+ * @param   bus_name : const ConstantString&
  * @return  uint8_t
  */
-uint8_t CanECU::get_address(const std::string& bus_name) const
+uint8_t CanECU::get_address(const ConstantString& bus_name) const
 {
   return _processor->device_db().get_ecu_address(name(), bus_name);
 }

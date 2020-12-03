@@ -52,14 +52,15 @@ friend bool can_library_release();
 
           bool                    set_transcoder(const CanTranscoderPtr&);
           void                    activate(uint8_t desired_address, 
-                                      const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+                                      const std::initializer_list<ConstantString>& buses = std::initializer_list<ConstantString>());
 
 private:
   LocalECU(CanProcessor*,const CanName& name);
-          void                    claim_address(uint8_t address,const std::string& bus_name);
-          void                    disable_device(const std::string& bus_name);
+          void                    claim_address(uint8_t address,const ConstantString& bus_name);
+          void                    disable_device(const ConstantString& bus_name);
 
-          bool                    send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,const std::string& bus_name);
+          bool                    send_message(const CanMessagePtr& message,const RemoteECUPtr& remote,
+                                              const ConstantString& bus_name,bool check_status = true);
           CanMessagePtr           request_pgn(uint32_t pgn);
 
 private:
@@ -73,27 +74,26 @@ private:
   {
     Queue() = default;
 
-    explicit Queue(const CanMessagePtr& message,const RemoteECUPtr& remote, const std::string& bus_name)
+    explicit Queue(const CanMessagePtr& message,const RemoteECUPtr& remote)
     : _message(message)
     , _remote(remote)
-    , _bus_name(bus_name)
     {}
 
     CanMessagePtr                   _message;
     RemoteECUPtr                    _remote;
-    std::string                     _bus_name;
   };
 
   struct Container
   {
-    Container() : _status(eInactive), _time_tag(0ULL) {}
+    Container(const ConstantString& bus_name = ConstantString()) : _status(eInactive), _time_tag(0ULL),  _bus_name(bus_name) {}
+    
+    CanString                       _bus_name;
     ECUStatus                       _status;
     uint64_t                        _time_tag;
     fifo<Queue>                     _fifo;
   };
   
-  typedef std::unordered_map<std::string,Container> ContainerMap;
-  ContainerMap                    _container_map;
+  fixed_list<Container,32>        _container_map;
 };
 
 

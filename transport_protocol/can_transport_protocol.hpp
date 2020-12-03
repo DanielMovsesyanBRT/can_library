@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include "../can_protocol.hpp"
+#include "can_protocol.hpp"
+#include "can_message.hpp"
+#include "can_ecu.hpp"
 #include "can_transport_session.hpp"
 #include "can_transport_defines.hpp"
 
@@ -33,11 +35,11 @@ public:
   virtual ~CanTransportProtocol();
 
   virtual bool                    send_message(const CanMessagePtr& message,const LocalECUPtr& local,
-                                            const RemoteECUPtr& remote, const std::string& bus_name);
+                                            const RemoteECUPtr& remote, const ConstantString& bus_name);
 
 private:
           bool                    on_update();
-          void                    on_pgn_callback(const CanPacket&,const std::string&);
+          void                    on_pgn_callback(const CanPacket&,const ConstantString&);
 
 private:
   typedef fifo<TransportSessionPtr,64>    SessionQueue;
@@ -106,7 +108,7 @@ private:
      * @param  bus_name :  const std::string&
      * @return  TransportSessionPtr
      */
-    TransportSessionPtr get_active(CanECUPtr source, CanECUPtr destination, const std::string& bus_name)
+    TransportSessionPtr get_active(const CanECUPtr& source,const CanECUPtr& destination, const ConstantString& bus_name)
     {
       size_t hash = TransportSession::hash(source, destination, bus_name);
       auto iter = _session_queue.find_if([hash](const HashPair& pair)->bool

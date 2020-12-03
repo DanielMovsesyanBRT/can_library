@@ -145,11 +145,12 @@ void RemoteECU::init_status()
 /**
  * \fn  RemoteECU::queue_message
  *
- * @param  remote : CanMessagePtr 
+ * @param  message : CanMessagePtr
  * @param  local :  LocalECUPtr 
- * @param  & bus_name :  const std::string
+ * @param   bus_name :  const ConstantString&
+ * @return  bool
  */
-bool RemoteECU::queue_message(CanMessagePtr message, LocalECUPtr local, const std::string& bus_name)
+bool RemoteECU::queue_message(const CanMessagePtr& message, const LocalECUPtr& local, const ConstantString& bus_name)
 {
   std::lock_guard<RecoursiveMutex> l(_mutex);
   if (_status_ready)

@@ -24,7 +24,7 @@ friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
   RxSession(CanProcessor* processor, Mutex* mutex,const CanECUPtr& source,const CanECUPtr& destination,
-                              const std::string& bus_name, const CanPacket& packet);
+                              const ConstantString& bus_name, const CanPacket& packet);
 
 public:
   virtual ~RxSession() {}
@@ -74,8 +74,8 @@ class RxSessionPtr : public shared_pointer<RxSession>
 {
 public:
   RxSessionPtr() {}
-  RxSessionPtr(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
-                              const std::string& bus_name, const CanPacket& packet);
+  RxSessionPtr(CanProcessor* processor, Mutex* mutex, const CanECUPtr& source,const CanECUPtr& destination,
+                              const ConstantString& bus_name, const CanPacket& packet);
 };
 
 

@@ -41,23 +41,26 @@ CanDeviceDatabase::~CanDeviceDatabase()
 /**
  * \fn  CanDeviceDatabase::create_bus
  *
- * @param  & bus_name : const std::string
+ * @param   bus_name : const ConstantString&
  */
-void CanDeviceDatabase::create_bus(const std::string& bus_name)
+void CanDeviceDatabase::create_bus(const ConstantString& bus_name)
 {
   bool register_pgn = false;
   {
     std::lock_guard<Mutex> l(_mutex);
     register_pgn = _device_map.empty();
-    if (_device_map.find(bus_name) != _device_map.end())
+    if (_device_map.find_if( [bus_name](const DeviceMap::value_type& value)->bool
+        { return value.first == bus_name; }) != _device_map.end())
+    {
       return;
+    }
   
-    _device_map.insert(DeviceMap::value_type(bus_name, BusMap()));
+    _device_map.push(DeviceMap::value_type(bus_name, BusMap()));
   }
 
   if (register_pgn)
   {
-    _processor->register_pgn_receiver(PGN_AddressClaimed, [this](const CanPacket& packet,const std::string& bus)
+    _processor->register_pgn_receiver(PGN_AddressClaimed, [this](const CanPacket& packet,const ConstantString& bus)
     {
       pgn_received(packet, bus);
     });
@@ -68,13 +71,15 @@ void CanDeviceDatabase::create_bus(const std::string& bus_name)
  * \fn  CanDeviceDatabase::get_ecu_by_address
  *
  * @param  sa : uint8_t 
- * @param  & bus : const std::string
+ * @param   bus_name : const ConstantString&
  * @return  CanECUPtr
  */
-CanECUPtr CanDeviceDatabase::get_ecu_by_address(uint8_t sa,const std::string& bus) const
+CanECUPtr CanDeviceDatabase::get_ecu_by_address(uint8_t sa,const ConstantString& bus_name) const
 {
   std::lock_guard<Mutex> l(_mutex);
-  auto bus_iter = _device_map.find(bus);
+  auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+      { return value.first == bus_name; });
+
   if (bus_iter == _device_map.end())
     return CanECUPtr();
 
@@ -84,11 +89,11 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_address(uint8_t sa,const std::string& bu
 /**
  * \fn  CanDeviceDatabase::get_ecu_by_name
  *
- * @param  name : const CanName& 
- * @param  & bus_name : const std::string
+ * @param   name : const CanName&
+ * @param   bus_name : const ConstantString&
  * @return  CanECUPtr
  */
-CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::string& bus_name) const
+CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const ConstantString& bus_name) const
 {
   std::lock_guard<Mutex> l(_mutex);
   if (bus_name.empty())
@@ -96,9 +101,9 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::stri
     for (auto bus_iter : _device_map)
     {
       auto device_iter = std::find_if(bus_iter.second.begin(),bus_iter.second.end(),[name](const CanECUPtr& ecu)->bool
-      {
-        return (ecu && (ecu->name().data64() == name.data64()));
-      });
+          {
+            return (ecu && (ecu->name().data64() == name.data64()));
+          });
       
       if (device_iter != bus_iter.second.end())
         return (*device_iter);
@@ -106,13 +111,15 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::stri
   }
   else
   {
-    auto bus_iter = _device_map.find(bus_name);
+    auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+        { return value.first == bus_name; });
+
     if (bus_iter != _device_map.end())
     {
       auto device_iter = std::find_if(bus_iter->second.begin(),bus_iter->second.end(),[name](const CanECUPtr& ecu)->bool
-      {
-        return (ecu && (ecu->name().data64() == name.data64()));
-      });
+          {
+            return (ecu && (ecu->name().data64() == name.data64()));
+          });
       
       if (device_iter != bus_iter->second.end())
         return (*device_iter);
@@ -120,7 +127,7 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::stri
   }
   
   auto iter = _prerecorded_local_devices.find_if([name](const LocalECUPtr& local)->bool
-  { return name.data64() == local->name().data64(); });
+      { return name.data64() == local->name().data64(); });
 
   if (iter != _prerecorded_local_devices.end())
     return *iter;
@@ -131,11 +138,11 @@ CanECUPtr CanDeviceDatabase::get_ecu_by_name(const CanName& name,const std::stri
 /**
  * \fn  CanDeviceDatabase::get_ecu_address
  *
- * @param  ecu_name : const CanName& 
- * @param  bus_name : const std::string&
+ * @param   ecu_name : const CanName&
+ * @param   bus_name : const ConstantString&
  * @return  uint8_t
  */
-uint8_t CanDeviceDatabase::get_ecu_address(const CanName& ecu_name,const std::string& bus_name) const
+uint8_t CanDeviceDatabase::get_ecu_address(const CanName& ecu_name,const ConstantString& bus_name) const
 {
   std::lock_guard<Mutex> l(_mutex);
   if (bus_name.empty())
@@ -152,7 +159,9 @@ uint8_t CanDeviceDatabase::get_ecu_address(const CanName& ecu_name,const std::st
   }
   else
   {
-    auto bus_iter = _device_map.find(bus_name);
+    auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+        { return value.first == bus_name; });
+
     if (bus_iter != _device_map.end())
     {
       auto& array = bus_iter->second;
@@ -170,10 +179,10 @@ uint8_t CanDeviceDatabase::get_ecu_address(const CanName& ecu_name,const std::st
 /**
  * \fn  CanDeviceDatabase::pgn_received
  *
- * @param  packet : const CanPacket& 
- * @param  & bus_name : const std::string
+ * @param   packet : const CanPacket&
+ * @param   bus_name : const ConstantString&
  */
-void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& bus_name)
+void CanDeviceDatabase::pgn_received(const CanPacket& packet,const ConstantString& bus_name)
 {
   if (packet.pgn() != PGN_AddressClaimed)
     return;
@@ -193,7 +202,9 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
 
   {
     std::lock_guard<Mutex> l(_mutex);
-    auto bus_iter = _device_map.find(bus_name);
+    auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+        { return value.first == bus_name; });
+
     if (bus_iter == _device_map.end())
       return;
 
@@ -294,11 +305,11 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const std::string& 
  * \fn  CanDeviceDatabase::add_local_ecu
  *
  * @param  ecu : LocalECUPtr 
- * @param  bus_name :  const std::string&
+ * @param   bus_name :  const ConstantString&
  * @param  address : uint8_t 
  * @return  bool
  */
-bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address)
+bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const ConstantString& bus_name,uint8_t address)
 {
   CanBusStatus stat = _processor->get_bus_status(bus_name);
   if (stat == eBusInactive)
@@ -306,7 +317,7 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
   
   if (stat != eBusActive)
   {
-    _processor->register_bus_callback(bus_name,[this,ecu,address](const std::string& bus_name, CanBusStatus status)->bool
+    _processor->register_bus_callback(bus_name,[this,ecu,address](const ConstantString& bus_name, CanBusStatus status)->bool
     {
       if (status == eBusInactive)
         return true;
@@ -337,29 +348,31 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
     if (iter != _prerecorded_local_devices.end())
       _prerecorded_local_devices.erase(iter);
 
-    auto bus_map = _device_map.find(bus_name);
-    if (bus_map == _device_map.end())
+    auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+        { return value.first == bus_name; });
+
+    if (bus_iter == _device_map.end())
       return false;
 
     if (address == BROADCATS_CAN_ADDRESS)
     {
-      address = find_free_address(bus_map->second);
+      address = find_free_address(bus_iter->second);
       if (address == NULL_CAN_ADDRESS)
         return false;
 
-      bus_map->second[address] = ecu;
+      bus_iter->second[address] = ecu;
       claim = true;
     }
     else
     {
-      auto old_ecu = bus_map->second[address];
+      auto old_ecu = bus_iter->second[address];
       if (old_ecu)
       {
         uint8_t new_address = NULL_CAN_ADDRESS;
         // The address is occupied, so we look to change it 
         // if all conditions are met
         if (ecu->name().is_self_configurable())
-          new_address = find_free_address(bus_map->second);
+          new_address = find_free_address(bus_iter->second);
         
         if (new_address == NULL_CAN_ADDRESS)
         {
@@ -374,7 +387,7 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
           {
             // Our ecu has higher priority
             // So we try to push the other one out
-            bus_map->second[address] = ecu;
+            bus_iter->second[address] = ecu;
             claim = true;
           }
           else
@@ -387,7 +400,7 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
       }
       else
       {
-        bus_map->second[address] = ecu;
+        bus_iter->second[address] = ecu;
         claim = true;
       }
     }
@@ -402,14 +415,16 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const std::string& bus_na
 /**
  * \fn  CanDeviceDatabase::remove_local_ecu
  *
- * @param  ecu_name : const CanName& 
- * @param  bus_name : const std::string&
+ * @param   ecu_name : const CanName&
+ * @param   bus_name : const ConstantString&
  * @return  bool
  */
-bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const std::string& bus_name)
+bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const ConstantString& bus_name)
 {
   std::lock_guard<Mutex> l(_mutex);
-  auto bus_iter = _device_map.find(bus_name);
+  auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+      { return value.first == bus_name; });
+
   if (bus_iter == _device_map.end())
     return false;
 
@@ -434,15 +449,17 @@ bool CanDeviceDatabase::remove_local_ecu(const CanName& ecu_name,const std::stri
  * \fn  CanDeviceDatabase::add_remote_abstract_ecu
  *
  * @param  ecu : RemoteECUPtr 
- * @param  & bus_name :  const std::string
+ * @param   bus_name :  const ConstantString&
  * @param  address : uint8_t 
  * @return  bool
  */
 bool CanDeviceDatabase::add_remote_abstract_ecu(RemoteECUPtr ecu, 
-                const std::string& bus_name,uint8_t address)
+                const ConstantString& bus_name,uint8_t address)
 {
   std::lock_guard<Mutex> l(_mutex);
-  auto bus_iter = _device_map.find(bus_name);
+  auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+      { return value.first == bus_name; });
+
   if (bus_iter == _device_map.end())
     return false;
 
@@ -457,11 +474,11 @@ bool CanDeviceDatabase::add_remote_abstract_ecu(RemoteECUPtr ecu,
 /**
  * \fn  CanDeviceDatabase::get_local_ecus
  *
- * @param  list : fixed_list<LocalECUPtr>& 
- * @param  buses :  const std::initializer_list<std::string>&
+ * @param   list : fixed_list<LocalECUPtr>&
+ * @param  buses  :  const std::initializer_list<ConstantString>&
  */
 void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list, 
-                      const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string>()*/)
+                      const std::initializer_list<ConstantString>& buses /*= std::initializer_list<ConstantString>()*/)
 {
   std::lock_guard<Mutex> l(_mutex);
 
@@ -480,10 +497,12 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list,
   {
     for (auto bus_name : buses)
     {
-      auto bus_map = _device_map.find(bus_name);
-      if (bus_map != _device_map.end())
+      auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+          { return value.first == bus_name; });
+
+      if (bus_iter != _device_map.end())
       {
-        for (auto device : bus_map->second)
+        for (auto device : bus_iter->second)
         {
           if (is_local_ecu(device))
             list.push(LocalECUPtr(device));
@@ -496,11 +515,11 @@ void CanDeviceDatabase::get_local_ecus(fixed_list<LocalECUPtr>& list,
 /**
  * \fn  CanDeviceDatabase::get_remote_ecus
  *
- * @param  list : fixed_list<RemoteECUPtr>& 
- * @param  buses :  const std::initializer_list<std::string>&
+ * @param   list : fixed_list<RemoteECUPtr>&
+ * @param  buses  :  const std::initializer_list<ConstantString>&
  */
 void CanDeviceDatabase::get_remote_ecus(fixed_list<RemoteECUPtr>& list, 
-                      const std::initializer_list<std::string>& buses /*= std::initializer_list<std::string>()*/)
+                      const std::initializer_list<ConstantString>& buses /*= std::initializer_list<ConstantString>()*/)
 {
   std::lock_guard<Mutex> l(_mutex);
 
@@ -519,10 +538,12 @@ void CanDeviceDatabase::get_remote_ecus(fixed_list<RemoteECUPtr>& list,
   {
     for (auto bus_name : buses)
     {
-      auto bus_map = _device_map.find(bus_name);
-      if (bus_map != _device_map.end())
+      auto bus_iter = _device_map.find_if([bus_name](const DeviceMap::value_type& value)->bool
+          { return value.first == bus_name; });
+
+      if (bus_iter != _device_map.end())
       {
-        for (auto device : bus_map->second)
+        for (auto device : bus_iter->second)
         {
           if (is_remote_ecu(device))
             list.push(RemoteECUPtr(device));

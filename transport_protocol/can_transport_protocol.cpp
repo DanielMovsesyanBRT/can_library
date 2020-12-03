@@ -30,10 +30,10 @@ CanTransportProtocol::CanTransportProtocol(CanProcessor* processor)
 {
   processor->register_updater([this]()->bool { return on_update(); });
   
-  processor->register_pgn_receiver(PGN_TP_CM, [this](const CanPacket& packet,const std::string& bus_name) 
+  processor->register_pgn_receiver(PGN_TP_CM, [this](const CanPacket& packet,const ConstantString& bus_name)
   { on_pgn_callback(packet,bus_name); } );
 
-  processor->register_pgn_receiver(PGN_TP_DT, [this](const CanPacket& packet,const std::string& bus_name) 
+  processor->register_pgn_receiver(PGN_TP_DT, [this](const CanPacket& packet,const ConstantString& bus_name)
   { on_pgn_callback(packet,bus_name); } );
 }
 
@@ -51,13 +51,14 @@ CanTransportProtocol::~CanTransportProtocol()
 /**
  * \fn  CanTransportProtocol::send_message
  *
- * @param  message : CanMessagePtr 
- * @param  local :  LocalECUPtr 
- * @param  remote :  RemoteECUPtr 
- * @param  & bus_name :  const std::string
+ * @param   message : const CanMessagePtr&
+ * @param   local : const LocalECUPtr&
+ * @param   remote : const RemoteECUPtr&
+ * @param   bus_name :  const ConstantString&
  * @return  bool
  */
-bool CanTransportProtocol::send_message(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote, const std::string& bus_name)
+bool CanTransportProtocol::send_message(const CanMessagePtr& message,const LocalECUPtr& local,
+                              const RemoteECUPtr& remote, const ConstantString& bus_name)
 {
   if ((message->length() <= 8) || (message->length() > 1785))
     return false;
@@ -81,12 +82,12 @@ bool CanTransportProtocol::on_update()
 }
 
 /**
- * \fn  CanTransportProtocol::on_pg_callback
+ * \fn  CanTransportProtocol::on_pgn_callback
  *
- * @param  packet : const CanPacket& 
- * @param  & bus_name : const std::string
+ * @param   packet : const CanPacket&
+ * @param   bus_name : const ConstantString&
  */
-void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::string& bus_name)
+void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const ConstantString& bus_name)
 {
   if (packet.dlc() < 8)
     return;
@@ -119,6 +120,7 @@ void CanTransportProtocol::on_pgn_callback(const CanPacket& packet,const std::st
           if (session)
             session->abort(AbortIgnoreMessage);
         }
+        break;
       default:
         {
           std::lock_guard<Mutex> lock(_mutex);

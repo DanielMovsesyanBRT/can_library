@@ -26,7 +26,18 @@ friend TxSessionPtr;
 friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
 
-  TxSession(CanProcessor* processor, Mutex* mutex,const CanMessagePtr& message,const CanECUPtr& source,const CanECUPtr& destination,const std::string& bus_name)
+  /**
+   * \fn  constructor TxSession
+   *
+   * @param  processor : CanProcessor*
+   * @param  mutex :  Mutex*
+   * @param   message : const CanMessagePtr&
+   * @param   source : const CanECUPtr&
+   * @param   destination :  const CanECUPtr&
+   * @param   bus_name : const ConstantString&
+   */
+  TxSession(CanProcessor* processor, Mutex* mutex,const CanMessagePtr& message,const CanECUPtr& source,
+                    const CanECUPtr& destination,const ConstantString& bus_name)
   : TransportSession(processor, mutex, message,  source, destination, bus_name)
   , _range(), _current(0), _time_tag(0), _timeout_value(0)
   {
@@ -82,7 +93,8 @@ class TxSessionPtr : public shared_pointer<TxSession>
 {
 public:
   TxSessionPtr() {}
-  TxSessionPtr(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, CanECUPtr source,CanECUPtr destination,const std::string& bus_name);
+  TxSessionPtr(CanProcessor* processor, Mutex* mutex, const CanMessagePtr& message, const CanECUPtr& source,
+                  const CanECUPtr& destination,const ConstantString& bus_name);
 };
 
 } // can

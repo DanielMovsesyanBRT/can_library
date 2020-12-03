@@ -28,7 +28,7 @@ public:
 
           const CanName&          name() const { return _name; }
 
-          uint8_t                 get_address(const std::string& bus_name) const;
+          uint8_t                 get_address(const ConstantString& bus_name) const;
 
 protected:
           CanProcessor*           processor() { return _processor; }

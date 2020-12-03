@@ -16,13 +16,13 @@ allocator<RxSession>* RxSession::_allocator = nullptr;
  *
  * @param  processor : CanProcessor* 
  * @param  mutex :  Mutex* 
- * @param  source : const CanECUPtr&
- * @param  destination : const CanECUPtr& 
- * @param  bus_name :  const std::string&
- * @param  packet :  const CanPacket& 
+ * @param   source : const CanECUPtr&
+ * @param   destination : const CanECUPtr&
+ * @param   bus_name :  const ConstantString&
+ * @param   packet :  const CanPacket&
  */
 RxSession::RxSession(CanProcessor* processor, Mutex* mutex,const CanECUPtr& source,const CanECUPtr& destination,
-                              const std::string& bus_name, const CanPacket& packet)
+                              const ConstantString& bus_name, const CanPacket& packet)
 : TransportSession(processor, mutex, CanMessagePtr(), source, destination, bus_name)
 , _range()
 , _current(0)
@@ -247,13 +247,13 @@ void RxSession::operator delete  ( void* ptr )
  *
  * @param  processor : CanProcessor* 
  * @param  mutex :  Mutex* 
- * @param  source :  CanECUPtr 
- * @param  destination : CanECUPtr 
- * @param  & bus_name :  const std::string
- * @param  packet :  const CanPacket& 
+ * @param  source :  const CanECUPtr&
+ * @param  destination : const CanECUPtr&
+ * @param   bus_name :  const ConstantString&
+ * @param   packet :  const CanPacket&
  */
-RxSessionPtr::RxSessionPtr(CanProcessor* processor, Mutex* mutex, CanECUPtr source,CanECUPtr destination,
-                              const std::string& bus_name, const CanPacket& packet)
+RxSessionPtr::RxSessionPtr(CanProcessor* processor, Mutex* mutex, const CanECUPtr& source, const CanECUPtr& destination,
+                              const ConstantString& bus_name, const CanPacket& packet)
 {
   if (RxSession::_allocator == nullptr)
     throw std::runtime_error("Library is not properly initialized");

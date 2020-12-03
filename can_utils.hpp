@@ -16,6 +16,8 @@
 #include <typeinfo>
 #include <vector>
 
+#include <string.h>
+
 namespace brt {
 namespace can {
 
@@ -159,6 +161,8 @@ private:
 
 public:
   
+  typedef _Type value_type;
+
   /**
    * \class iterator
    *
@@ -591,6 +595,45 @@ private:
   std::atomic_uint32_t            _thread_id;
 };
 
+
+/**
+ * \class CanString
+ *
+ */
+class CanString
+{
+#define MAX_CAN_STRING                       (256)
+public:
+  CanString()
+  { _string[0] = '\0'; }
+
+  CanString(const char *name)
+  { strncpy(_string, name, MAX_CAN_STRING-1);  }
+
+  CanString(const CanString& canstring)
+  { strncpy(_string, canstring._string, MAX_CAN_STRING-1);  }
+
+          const char*             c_str() const { return _string; }
+          size_t                  size() const { return strlen(_string); }
+          operator const char*() const { return c_str(); }
+
+          int compare(const char *str) const
+          {
+            return strncmp(_string, str, MAX_CAN_STRING-1);
+          }
+
+          bool operator==(const char *str) const { return compare(str) == 0; }
+          bool operator!=(const char *str) const { return compare(str) != 0; }
+          CanString& operator=(const char *str)
+          {
+            strncpy(_string, str, MAX_CAN_STRING-1);
+            return *this;
+          }
+
+private:
+  char                            _string[MAX_CAN_STRING];
+};
+
 /**
  * \class ConstantString
  *
@@ -598,7 +641,7 @@ private:
 class ConstantString
 {
 public:
-  explicit ConstantString(const char* str)
+  ConstantString(const char* str = nullptr)
   : _string((str == nullptr) ? _empty_string : str)
   , _size(0)
   {
@@ -607,20 +650,33 @@ public:
       _size++;
   }
 
+  ConstantString(const CanString& canstr)
+  : _string(canstr.c_str())
+  , _size(canstr.size())
+  {  }
+
   ~ConstantString() {}
 
-  ConstantString(const ConstantString&) = delete;
-  ConstantString& operator=(const ConstantString&) = delete;
+  ConstantString(const ConstantString&) = default;
+  ConstantString& operator=(const ConstantString&) = default;
+  bool operator==(const char *str) const = delete;
+  bool operator!=(const char *str) const = delete;
 
           const char*             c_str() const { return _string; } 
+          const char*             data() const { return _string; }
+
           size_t                  size() const { return _size; }
+          size_t                  length() const { return _size; }
+
           bool                    empty() const { return _size == 0; }
+          operator const char*() const { return c_str(); }
           
 private:
   static const char               _empty_string[3];
   const char*                     _string;
   size_t                          _size;
 };
+
 
 
 inline std::array<uint8_t,2> can_pack16(uint16_t value)
@@ -672,7 +728,6 @@ inline uint32_t can_unpack32(const uint8_t* data)
 {
   return static_cast<uint32_t>(data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24));
 }
-
 
 
 } // can

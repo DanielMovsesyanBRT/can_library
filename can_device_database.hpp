@@ -30,31 +30,31 @@ class CanProcessor;
  */
 class CanDeviceDatabase  
 {
-  typedef std::array<CanECUPtr, 256>              BusMap;
-  typedef std::unordered_map<std::string,BusMap>  DeviceMap;
+  typedef std::array<CanECUPtr, 256>                  BusMap;
+  typedef fixed_list<std::pair<CanString,BusMap>,32>  DeviceMap;
 
 public:
   CanDeviceDatabase(CanProcessor*);
   virtual ~CanDeviceDatabase();
 
-          void                    create_bus(const std::string& bus_name);  
+          void                    create_bus(const ConstantString& bus_name);
 
-          CanECUPtr               get_ecu_by_address(uint8_t sa,const std::string& bus_name) const;
-          CanECUPtr               get_ecu_by_name(const CanName& ecu_name,const std::string& bus_name) const;
-          uint8_t                 get_ecu_address(const CanName& ecu_name,const std::string& bus_name) const;
+          CanECUPtr               get_ecu_by_address(uint8_t sa,const ConstantString& bus_name) const;
+          CanECUPtr               get_ecu_by_name(const CanName& ecu_name,const ConstantString& bus_name) const;
+          uint8_t                 get_ecu_address(const CanName& ecu_name,const ConstantString& bus_name) const;
       
-          bool                    add_local_ecu(LocalECUPtr ecu, const std::string& bus_name,uint8_t address);
-          bool                    remove_local_ecu(const CanName& ecu_name,const std::string& bus_name);
+          bool                    add_local_ecu(LocalECUPtr ecu, const ConstantString& bus_name,uint8_t address);
+          bool                    remove_local_ecu(const CanName& ecu_name,const ConstantString& bus_name);
           
-          bool                    add_remote_abstract_ecu(RemoteECUPtr ecu, const std::string& bus_name,uint8_t address);
+          bool                    add_remote_abstract_ecu(RemoteECUPtr ecu, const ConstantString& bus_name,uint8_t address);
 
           void                    get_local_ecus(fixed_list<LocalECUPtr>& list, 
-                                                const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+                                                const std::initializer_list<ConstantString>& buses = std::initializer_list<ConstantString>());
           void                    get_remote_ecus(fixed_list<RemoteECUPtr>& list, 
-                                                const std::initializer_list<std::string>& buses = std::initializer_list<std::string>());
+                                                const std::initializer_list<ConstantString>& buses = std::initializer_list<ConstantString>());
 
 private:
-          void                    pgn_received(const CanPacket& packet,const std::string& bus_name);
+          void                    pgn_received(const CanPacket& packet,const ConstantString& bus_name);
           uint8_t                 find_free_address(BusMap& bus_map);
           
           bool                    is_local_ecu(CanECUPtr ecu) 

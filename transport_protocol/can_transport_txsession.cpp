@@ -110,7 +110,7 @@ void TxSession::update()
       _state = WaitDriverConfirmation;
 
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_bam([me, num_packets, this](uint64_t,const std::string& bus_name,bool success)
+      if (!send_bam([me, num_packets, this](uint64_t,const ConstantString& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -147,7 +147,7 @@ void TxSession::update()
       _state = WaitDriverConfirmation;
 
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_data(_current, [me, this](uint64_t,const std::string& bus_name,bool success)
+      if (!send_data(_current, [me, this](uint64_t,const ConstantString& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -178,7 +178,7 @@ void TxSession::update()
                       _state = WaitEOM;
                   }
                 }
-                
+                update();
               }
               else
                 me->_state = None;
@@ -199,7 +199,7 @@ void TxSession::update()
       _state = WaitDriverConfirmation;
 
       auto me = dynamic_shared_cast<TxSession>(getptr());
-      if (!send_rts([me, this](uint64_t,const std::string& bus_name,bool success)
+      if (!send_rts([me, this](uint64_t,const ConstantString& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -261,7 +261,7 @@ void TxSession::pgn_received(const CanPacket& packet)
 
       auto me = dynamic_shared_cast<TxSession>(getptr());
 
-      if (!send_data(_current, [me, this](uint64_t,const std::string& bus_name,bool success)
+      if (!send_data(_current, [me, this](uint64_t,const ConstantString& bus_name,bool success)
       /// Lambda begin
             {
               std::lock_guard<Mutex>   l(*(me->_mutex));
@@ -363,13 +363,13 @@ void TxSession::operator delete  ( void* ptr )
  *
  * @param  processor : CanProcessor* 
  * @param  mutex :  Mutex* 
- * @param  message :  CanMessagePtr 
- * @param  source :  CanECUPtr 
- * @param  destination : CanECUPtr 
- * @param  & bus_name : const std::string
+ * @param   message :  const CanMessagePtr&
+ * @param   source :  const CanECUPtr&
+ * @param   destination : const CanECUPtr&
+ * @param   bus_name : const ConstantString&
  */
-TxSessionPtr::TxSessionPtr(CanProcessor* processor, Mutex* mutex, CanMessagePtr message, 
-                                  CanECUPtr source,CanECUPtr destination,const std::string& bus_name)
+TxSessionPtr::TxSessionPtr(CanProcessor* processor, Mutex* mutex, const CanMessagePtr& message,
+                                  const CanECUPtr& source,const CanECUPtr& destination,const ConstantString& bus_name)
 {
   if (TxSession::_allocator == nullptr)
     throw std::runtime_error("Library is not properly initialized");
