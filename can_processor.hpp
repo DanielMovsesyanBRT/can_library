@@ -168,17 +168,10 @@ private:
   typedef std::pair<uint32_t,PGNCallback> PgnReceiver;
   fixed_list<PgnReceiver,32>       _pgn_receivers;
 
-  //std::unordered_map<std::string,Bus> _bus_map;
-  //std::unordered_map<uint32_t,PGNCallback> _pgn_receivers;
-  
   fixed_list<UpdateCallback,32>   _updaters;
   fixed_list<CanProtocolPtr,32>   _transport_stack;
 
-  //std::list<UpdateCallback>       _updaters;
-  //std::deque<CanProtocolPtr>      _transport_stack;
-
   // Real time structures
-
   /**
    * \struct PacketConfirmation
    *
