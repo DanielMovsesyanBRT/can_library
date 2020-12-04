@@ -30,17 +30,21 @@ class RemoteECU  : public CanECU
 {
 friend RemoteECUPtr;
 friend CanDeviceDatabase;
+friend CanProcessor;
 friend bool can_library_init(const LibraryConfig&);
 friend bool can_library_release();
+friend shared_pointer<RemoteECU>;
 
 public:
-  std::function<bool(const shared_pointer<CanTranscoder>&)> RequestCallback;
-
   virtual ~RemoteECU();
-        
-          void                    operator delete  ( void* ptr );
+      
 
+private:
+  RemoteECU(CanProcessor*,const CanName& name = CanName());
+          
+          void                    init_status();
           shared_pointer<CanTranscoder> get_requested_pgn(uint32_t pgn) const;
+          bool                    queue_message(const CanMessagePtr& message,const LocalECUPtr& local, const ConstantString& bus_name);
           bool                    on_message_received(const CanMessagePtr& msg);
 
           bool                    is_ready() const 
@@ -49,12 +53,7 @@ public:
             return _status_ready; 
           }
 
-          bool                    queue_message(const CanMessagePtr& message,const LocalECUPtr& local, const ConstantString& bus_name);
-
-private:
-  RemoteECU(CanProcessor*,const CanName& name = CanName());
-          
-          void                    init_status();
+          void                    operator delete  ( void* ptr );
 
 
   static  allocator<RemoteECU>*   _allocator;

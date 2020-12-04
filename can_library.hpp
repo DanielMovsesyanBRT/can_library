@@ -24,7 +24,7 @@ namespace can {
 class CanInterface
 {
 public:
-    typedef std::function<void(const shared_pointer<CanTranscoder>&)> RequestCallback;
+    typedef std::function<void(const CanTranscoderPtr&)> RequestCallback;
 
   /**
    * \class Callback
@@ -40,9 +40,9 @@ public:
     virtual void                    on_remote_ecu(const RemoteECUPtr& remote,const ConstantString& bus_name) = 0;
 
     virtual uint32_t                create_mutex() = 0;
-    virtual void                    delete_mutex(uint32_t) = 0;
-    virtual void                    lock_mutex(uint32_t) = 0;
-    virtual void                    unlock_mutex(uint32_t) = 0;
+    virtual void                    delete_mutex(uint32_t mutex_id) = 0;
+    virtual void                    lock_mutex(uint32_t mutex_id) = 0;
+    virtual void                    unlock_mutex(uint32_t mutex_id) = 0;
     virtual uint32_t                get_current_thread_id() const = 0;
   };
 
@@ -70,9 +70,9 @@ public:
 
   virtual bool                    request_pgn(uint32_t pgn,const LocalECUPtr& local,const RemoteECUPtr& remote,const RequestCallback& callback) = 0;
 
-          Callback*               cback() const { return _cback; }
 protected:
   CanInterface(Callback*);
+          Callback*               cback() const { return _cback; }
 
 private:
   Callback*                       _cback;
