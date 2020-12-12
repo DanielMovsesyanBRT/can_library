@@ -211,8 +211,8 @@ public:
 
     reference operator*()  { return _ptr->_v; }
     pointer operator->() { return &_ptr->_v;  }
-    bool operator==(const self_type& rhs) { return _ptr == rhs._ptr; }
-    bool operator!=(const self_type& rhs) { return _ptr != rhs._ptr; }
+    bool operator==(const self_type& rhs) const { return _ptr == rhs._ptr; }
+    bool operator!=(const self_type& rhs) const { return _ptr != rhs._ptr; }
 
   private:
     filler*                         _ptr;
@@ -532,14 +532,26 @@ public:
   operator bool() const
   { return (_ptr != nullptr); }
 
-  bool operator==(const shared_pointer<_Class>& s) const
+  bool operator==(const shared_pointer& s) const
   {
     return _ptr == s._ptr;
   }
 
-  bool operator!=(const shared_pointer<_Class>& s) const
+  bool operator!=(const shared_pointer& s) const
   {
     return _ptr != s._ptr;
+  }
+
+  template <typename _Tp>
+  bool operator==(const shared_pointer<_Tp>& s) const
+  {
+    return *this == static_cast<shared_pointer>(s);
+  }
+
+  template <typename _Tp>
+  bool operator!=(const shared_pointer<_Tp>& s) const
+  {
+    return *this != static_cast<shared_pointer>(s);
   }
 
 private:
@@ -578,14 +590,14 @@ private:
 };
 
 /**
- * \class RecoursiveMutex
+ * \class RecursiveMutex
  *
  */
-class RecoursiveMutex : public Mutex
+class RecursiveMutex : public Mutex
 {
 public:
-  RecoursiveMutex(CanProcessor* processor);
-  virtual ~RecoursiveMutex() {}
+  RecursiveMutex(CanProcessor* processor);
+  virtual ~RecursiveMutex() {}
 
   virtual void                    lock();
   virtual void                    unlock();
@@ -595,6 +607,8 @@ private:
   std::atomic_uint32_t            _thread_id;
 };
 
+
+class ConstantString;
 
 /**
  * \class CanString
@@ -624,6 +638,8 @@ public:
 
           bool operator==(const char *str) const { return compare(str) == 0; }
           bool operator!=(const char *str) const { return compare(str) != 0; }
+          bool operator==(const ConstantString& str) const;
+          bool operator!=(const ConstantString& str) const;
           CanString& operator=(const char *str)
           {
             strncpy(_string, str, MAX_CAN_STRING-1);
@@ -676,6 +692,9 @@ private:
   const char*                     _string;
   size_t                          _size;
 };
+
+inline bool CanString::operator==(const ConstantString& str) const { return compare(str) == 0; }
+inline bool CanString::operator!=(const ConstantString& str) const { return compare(str) != 0; }
 
 
 

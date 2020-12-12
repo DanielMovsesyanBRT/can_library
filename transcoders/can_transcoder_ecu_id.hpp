@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "can_transcoder.hpp"
 
 #define MAX_ECUID_CHARACTERS                (200)

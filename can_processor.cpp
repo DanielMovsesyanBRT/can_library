@@ -48,7 +48,7 @@ void CanProcessor::update()
   uint64_t time_tick = get_time_tick();
 
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     // Call all updaters
     for (auto updater : _updaters)
     {
@@ -95,7 +95,7 @@ void CanProcessor::update()
 bool CanProcessor::register_can_bus(const ConstantString& bus_name)
 {
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     if (_bus_map.find_if([bus_name](const Bus& bus)->bool
              { return bus._bus_name == bus_name;}) != _bus_map.end())
     {
@@ -104,7 +104,7 @@ bool CanProcessor::register_can_bus(const ConstantString& bus_name)
   }
 
   // Request for address Claimed
-  CanPacket packet({00,0xEE,00}, PGN_Request, BROADCATS_CAN_ADDRESS, NULL_CAN_ADDRESS);
+  CanPacket packet({00,0xEE,00}, PGN_Request, BROADCAST_CAN_ADDRESS, NULL_CAN_ADDRESS);
 
   Bus bus;
   bus._bus_name       = bus_name;
@@ -113,7 +113,7 @@ bool CanProcessor::register_can_bus(const ConstantString& bus_name)
   bus._initial_packet_id = packet.unique_id();
 
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     auto result = _bus_map.push(bus);
     if (result == _bus_map.end())
       return false;
@@ -122,7 +122,7 @@ bool CanProcessor::register_can_bus(const ConstantString& bus_name)
     _confirm_callbacks.push(PacketConfirmation(packet.unique_id(),
            [this](uint64_t packet_id,CanMessageConfirmation status) 
       {
-        std::lock_guard<RecoursiveMutex> l(_mutex);
+        std::lock_guard<RecursiveMutex> l(_mutex);
         for (auto& bus : _bus_map)
         {
           if ((bus._status == eBusWaitForSuccesfullTX) &&
@@ -220,8 +220,8 @@ void CanProcessor::on_request(const CanPacket& packet,const ConstantString& bus_
       if (!msg)
         msg = CanTranscoderAck(CanTranscoderAck::Nack, packet.sa(), pgn).create_message();
 
-        if (msg)
-          send_can_message(msg, local, remote, { bus_name });
+      if (msg)
+        send_can_message(msg, local, remote, { bus_name });
     }
   }
 }
@@ -234,7 +234,7 @@ void CanProcessor::on_request(const CanPacket& packet,const ConstantString& bus_
  */
 CanBusStatus CanProcessor::get_bus_status(const ConstantString& bus_name) const
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   auto iter = _bus_map.find_if([bus_name](const Bus& bus)->bool
       { return bus._bus_name == bus_name;});
 
@@ -268,10 +268,10 @@ LocalECUPtr CanProcessor::create_local_ecu(const CanName& name)
  * @return  bool
  */
 bool CanProcessor::activate_local_ecu(const LocalECUPtr& ecu, const ConstantString& bus_name,
-                        uint8_t desired_address /*= BROADCATS_CAN_ADDRESS*/)
+                        uint8_t desired_address /*= BROADCAST_CAN_ADDRESS*/)
 {
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     if (_bus_map.find_if([bus_name](const Bus& bus)->bool
             { return bus._bus_name == bus_name; }) == _bus_map.end())
     {
@@ -320,7 +320,7 @@ bool CanProcessor::destroy_local_ecu(const CanName& name)
 {
   size_t num = 0;
   
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   for (auto bus : _bus_map)
   {
     if (device_db().remove_local_ecu(name,bus._bus_name))
@@ -349,7 +349,7 @@ bool CanProcessor::received_can_packet(const CanPacket& packet,const ConstantStr
 
   {
     // Now check whether the PGN belongs to one of the listeners e.g Request Address Claimed, TP, ETP
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     auto pgn_receiver = _pgn_receivers.find_if([packet](const PgnReceiver& receiver)->bool
         { return packet.pgn() == receiver.first; });
 
@@ -423,7 +423,7 @@ void CanProcessor::message_received(const CanMessagePtr& message,const LocalECUP
     auto req = remote->get_requested_pgn(message->pgn());
     if (req)
     {
-      std::lock_guard<RecoursiveMutex> l(_mutex);
+      std::lock_guard<RecursiveMutex> l(_mutex);
       for (auto iter = _requested_pgns.begin(); iter != _requested_pgns.end(); )
       {
         if ((iter->_pgn == message->pgn()) && (iter->_ecu == remote))
@@ -467,7 +467,7 @@ bool CanProcessor::SimpleTransport::send_message(const CanMessagePtr& message,co
  */
 void CanProcessor::can_packet_confirm(uint64_t packet_id,CanMessageConfirmation status)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   auto iter = _confirm_callbacks.find_if([packet_id](const PacketConfirmation& cfrm)->bool
   {
     return cfrm._packet_id == packet_id;
@@ -510,7 +510,7 @@ bool CanProcessor::request_pgn(uint32_t pgn,const LocalECUPtr& local,const Remot
     callback(req_pgn);
   else
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     _requested_pgns.push(RequestedPGNs(pgn,remote,callback));
     send_can_message(CanMessagePtr(can_pack24(pgn),PGN_Request), local, remote);
   }
@@ -529,7 +529,7 @@ bool CanProcessor::request_pgn(uint32_t pgn,const LocalECUPtr& local,const Remot
 bool CanProcessor::send_raw_packet(const CanPacket& packet,const ConstantString& bus_name,
                       const ConfirmationCallback& fn/* = ConfirmationCallback()*/)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   auto bus = _bus_map.find_if([bus_name](const Bus& bus)->bool
       { return bus._bus_name == bus_name; });
 
@@ -564,7 +564,7 @@ bool CanProcessor::send_raw_packet(const CanPacket& packet,const ConstantString&
  */
 void CanProcessor::register_pgn_receiver(uint32_t pgn, const PGNCallback& fn)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   _pgn_receivers.push(PgnReceiver(pgn,fn));
 }
 
@@ -575,7 +575,7 @@ void CanProcessor::register_pgn_receiver(uint32_t pgn, const PGNCallback& fn)
  */
 void CanProcessor::register_updater(const UpdateCallback& fn)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   _updaters.push(fn);
 }
 
@@ -587,7 +587,7 @@ void CanProcessor::register_updater(const UpdateCallback& fn)
  */
 void CanProcessor::register_bus_callback(const ConstantString& bus_name, const BusStatusCallback& fn)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   auto bus = _bus_map.find_if([bus_name](const Bus& bus)->bool
       { return bus._bus_name == bus_name; });
 

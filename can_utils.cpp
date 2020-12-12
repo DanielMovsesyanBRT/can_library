@@ -51,11 +51,11 @@ void Mutex::unlock()
 }
 
 /**
- * \fn  constructor RecoursiveMutex::RecoursiveMutex
+ * \fn  constructor RecursiveMutex::RecursiveMutex
  *
  * @param  processor : CanProcessor* 
  */
-RecoursiveMutex::RecoursiveMutex(CanProcessor* processor)
+RecursiveMutex::RecursiveMutex(CanProcessor* processor)
 : Mutex(processor)
 , _lock_counter(0)
 , _thread_id((uint32_t)-1)
@@ -64,10 +64,10 @@ RecoursiveMutex::RecoursiveMutex(CanProcessor* processor)
 }
 
 /**
- * \fn  RecoursiveMutex::lock
+ * \fn  RecursiveMutex::lock
  *
  */
-void RecoursiveMutex::lock()
+void RecursiveMutex::lock()
 {
   if (_thread_id.load() == processor()->get_current_thread_id())
   {
@@ -82,10 +82,10 @@ void RecoursiveMutex::lock()
 }
 
 /**
- * \fn  RecoursiveMutex::unlock
+ * \fn  RecursiveMutex::unlock
  *
  */
-void RecoursiveMutex::unlock()
+void RecursiveMutex::unlock()
 {
   if (_lock_counter.load() > 1)
   {

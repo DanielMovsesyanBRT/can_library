@@ -100,7 +100,7 @@ void LocalECU::claim_address(uint8_t address,const ConstantString& bus_name)
     });
   }
 
-  processor()->send_raw_packet(CanPacket(name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCATS_CAN_ADDRESS, address),bus_name);
+  processor()->send_raw_packet(CanPacket(name().data(), sizeof(uint64_t), PGN_AddressClaimed, BROADCAST_CAN_ADDRESS, address),bus_name);
 }
 
 /**
@@ -136,7 +136,7 @@ bool LocalECU::send_message(const CanMessagePtr& message,const RemoteECUPtr& rem
     }
   }
   
-  uint8_t da = BROADCATS_CAN_ADDRESS;
+  uint8_t da = BROADCAST_CAN_ADDRESS;
   if (remote)
   {
     da = remote->get_address(bus_name);

@@ -57,7 +57,7 @@ private:
 
 
   static  allocator<RemoteECU>*   _allocator;
-  mutable RecoursiveMutex         _mutex;
+  mutable RecursiveMutex         _mutex;
   
   // status
   uint64_t                        _status_timer;
