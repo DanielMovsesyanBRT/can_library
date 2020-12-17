@@ -73,7 +73,7 @@ public:
           size_t                  get_all_buses(fixed_list<ConstantString,_Size>& buses) const
           {
             buses.clear();
-            std::lock_guard<RecoursiveMutex> l(_mutex);
+            std::lock_guard<RecursiveMutex> l(_mutex);
             for (auto bus : _bus_map)
               buses.push(bus._bus_name);
 
@@ -88,7 +88,7 @@ public:
           void                    message_received(const CanMessagePtr& message,const LocalECUPtr& local,const RemoteECUPtr& remote,const ConstantString& bus_name);
 
   virtual LocalECUPtr             create_local_ecu(const CanName& name);
-          bool                    activate_local_ecu(const LocalECUPtr&, const ConstantString& bus_name, uint8_t desired_address = BROADCATS_CAN_ADDRESS);
+          bool                    activate_local_ecu(const LocalECUPtr&, const ConstantString& bus_name, uint8_t desired_address = BROADCAST_CAN_ADDRESS);
 
   virtual RemoteECUPtr            register_abstract_remote_ecu(uint8_t address,const ConstantString& bus);
 
@@ -143,7 +143,7 @@ private:
                                               const RemoteECUPtr& remote, const ConstantString& bus_name);
   };
 
-  mutable RecoursiveMutex         _mutex;
+  mutable RecursiveMutex         _mutex;
   CanDeviceDatabase               _device_db;
   std::atomic_uint_fast64_t       _remote_name_counter;
 

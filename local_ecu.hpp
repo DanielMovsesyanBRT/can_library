@@ -85,7 +85,7 @@ private:
 
   struct Container
   {
-    Container(const ConstantString& bus_name = ConstantString()) : _status(eInactive), _time_tag(0ULL),  _bus_name(bus_name) {}
+    Container(const ConstantString& bus_name = ConstantString()) : _bus_name(bus_name), _status(eInactive), _time_tag(0ULL)  {}
     
     CanString                       _bus_name;
     ECUStatus                       _status;

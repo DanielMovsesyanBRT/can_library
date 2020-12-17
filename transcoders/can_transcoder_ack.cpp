@@ -54,9 +54,9 @@ CanTranscoderAck::CanTranscoderAck(const CanMessagePtr& message)
 CanMessagePtr CanTranscoderAck::create_message() const
 {
   uint8_t data[8] = {_value, _group_function, 0xFF, 0xFF, 0xFF,
-    static_cast<uint8_t>(_address, _pgn & 0xFF),
-    static_cast<uint8_t>(_address, (_pgn >> 8) & 0xFF),
-    static_cast<uint8_t>(_address, (_pgn >> 16) & 0xFF)
+    static_cast<uint8_t>(_pgn & 0xFF),
+    static_cast<uint8_t>((_pgn >> 8) & 0xFF),
+    static_cast<uint8_t>((_pgn >> 16) & 0xFF)
     };
   
   return CanMessagePtr(data, sizeof(data), PGN_AckNack);

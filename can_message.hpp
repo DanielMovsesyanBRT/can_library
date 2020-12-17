@@ -102,9 +102,9 @@ public:
 
             uint32_t              pgn() const { return is_pdu1() ? ((_id >> 8) & 0x3FF00): ((_id >> 8) & 0x3FFFF); }
             uint8_t               sa() const { return static_cast<uint8_t>(_id & 0xFF); }
-            uint8_t               da() const { return static_cast<uint8_t>(is_pdu1() ? ((_id >> 8) & 0xFF): BROADCATS_CAN_ADDRESS); }
+            uint8_t               da() const { return static_cast<uint8_t>(is_pdu1() ? ((_id >> 8) & 0xFF): BROADCAST_CAN_ADDRESS); }
             uint8_t               priority() const { return static_cast<uint8_t>((_id >> 26) & 7); }
-            bool                  is_broadcast() const { return (da() == BROADCATS_CAN_ADDRESS); }
+            bool                  is_broadcast() const { return (da() == BROADCAST_CAN_ADDRESS); }
 private:
   uint32_t                        _id;
   uint8_t                         _dlc;
@@ -177,10 +177,11 @@ private:
 private:
   uint32_t                        _pgn;
   uint8_t                         _priority;
-  ConfirmationCallback            _cback;
 
   uint64_t                        _unique_id;
   static std::atomic_uint64_t     _unique_counter;
+
+  ConfirmationCallback            _cback;
 
   uint32_t                        _size;
   uint8_t                         _data[0];

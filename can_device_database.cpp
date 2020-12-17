@@ -187,7 +187,7 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const ConstantStrin
   if (packet.pgn() != PGN_AddressClaimed)
     return;
 
-  uint8_t sa = BROADCATS_CAN_ADDRESS;
+  uint8_t sa = BROADCAST_CAN_ADDRESS;
   LocalECUPtr local;
   RemoteECUPtr remote;
 
@@ -291,7 +291,7 @@ void CanDeviceDatabase::pgn_received(const CanPacket& packet,const ConstantStrin
     }
   } // mutex lock
 
-  if (local && (sa != BROADCATS_CAN_ADDRESS))
+  if (local && (sa != BROADCAST_CAN_ADDRESS))
     local->claim_address(sa, bus_name);
 
   if (remote)
@@ -354,7 +354,7 @@ bool CanDeviceDatabase::add_local_ecu(LocalECUPtr ecu, const ConstantString& bus
     if (bus_iter == _device_map.end())
       return false;
 
-    if (address == BROADCATS_CAN_ADDRESS)
+    if (address == BROADCAST_CAN_ADDRESS)
     {
       address = find_free_address(bus_iter->second);
       if (address == NULL_CAN_ADDRESS)

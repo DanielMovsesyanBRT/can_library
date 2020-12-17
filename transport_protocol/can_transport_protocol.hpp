@@ -125,7 +125,7 @@ private:
     SessionMap                    _session_queue;
   }                               _session_stack[eNumDirections];
 
-  RecoursiveMutex                 _mutex;
+  RecursiveMutex                 _mutex;
 };
 
 } // can

@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <string_view>
+
 #include "can_utils.hpp"
 #include "local_ecu.hpp"
 #include "remote_ecu.hpp"
@@ -42,8 +44,8 @@ public:
   { 
   }
 
-  TransportSession(const TransportSession& session) = default;
-  TransportSession& operator=(const TransportSession& session) = default;
+  TransportSession(const TransportSession& session) = delete;
+  TransportSession& operator=(const TransportSession& session) = delete;
 
   /**
    * \fn  destructor TransportSession
@@ -78,7 +80,7 @@ public:
     else
       hash ^= std::hash<uint32_t>()(0xFFFFFFFF);
             
-    hash ^= std::_Hash_impl::hash(bus_name.data(), bus_name.length());
+    hash ^= std::hash<std::string_view>()(std::string_view(bus_name.data(), bus_name.length()));
     return hash;
   }
 

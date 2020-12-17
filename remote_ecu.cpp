@@ -26,9 +26,9 @@ allocator<RemoteECU>* RemoteECU::_allocator = nullptr;
  */
 RemoteECU::RemoteECU(CanProcessor* processor,const CanName& name /*= CanName()*/)
 : CanECU(processor,name)
+, _mutex(processor)
 , _status_timer(processor->get_time_tick())
 , _status_ready(false)
-, _mutex(processor)
 , _queue()
 {
 
@@ -70,7 +70,7 @@ bool RemoteECU::on_message_received(const CanMessagePtr& msg)
   if (pgn == PGN_AckNack)
     pgn = CanTranscoderAck(msg).pgn();
 
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   switch(pgn)
   {
   case PGN_SoftwareID:
@@ -96,7 +96,7 @@ bool RemoteECU::on_message_received(const CanMessagePtr& msg)
  */
 shared_pointer<CanTranscoder> RemoteECU::get_requested_pgn(uint32_t pgn) const
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   switch(pgn)
   {
   case PGN_SoftwareID:
@@ -116,13 +116,13 @@ shared_pointer<CanTranscoder> RemoteECU::get_requested_pgn(uint32_t pgn) const
  */
 void RemoteECU::init_status()
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   _status_ready = false;
   _status_timer = processor()->get_time_tick();
   
   processor()->register_updater([this]()->bool
   {
-    std::lock_guard<RecoursiveMutex> l(_mutex);
+    std::lock_guard<RecursiveMutex> l(_mutex);
     if (!_status_ready)
     {
       if ((processor()->get_time_tick() - _status_timer) > CAN_ADDRESS_CLAIMED_WAITING_TIME)
@@ -152,7 +152,7 @@ void RemoteECU::init_status()
  */
 bool RemoteECU::queue_message(const CanMessagePtr& message, const LocalECUPtr& local, const ConstantString& bus_name)
 {
-  std::lock_guard<RecoursiveMutex> l(_mutex);
+  std::lock_guard<RecursiveMutex> l(_mutex);
   if (_status_ready)
     return false;
   
